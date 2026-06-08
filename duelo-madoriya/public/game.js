@@ -7,13 +7,14 @@ const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 canvas.width = innerWidth; canvas.height = innerHeight;
 
-// --- ESTADO DO JOGO ---
 function makeFighter(x, y, color) {
+  const s = { ...getSheet({ metadata: {} }) };
+  // MODO TESTE: garante EP pra testar o nitro mesmo se a ficha vier zerada
+  if (!s.epMax || s.epMax < 5) { s.epMax = 5; s.ep = 5; }
   return {
-    x, y, color, sheet: { ...getSheet({ metadata: {} }) }, mouse: { x, y },
+    x, y, color, sheet: s, mouse: { x, y },
     scaleX: 1, scaleY: 1, flash: 0, shake: 0, charge: 0, kx: 0, ky: 0,
-    epCharge: 0, iframes: 0, dashCd: 0,
-    cd: { dmgRanged: 0, dmgMagic: 0, dmgMelee: 0 }
+    epCharge: 0, iframes: 0, dashCd: 0, atkCd: 0   // atkCd = cooldown GLOBAL
   };
 }
 const players = {
@@ -26,14 +27,12 @@ const keys = {};
 const floats = [];
 let gameOver = false;
 
-// --- TABELA DE NITRO (Escala de Poder do Madoriya) ---
 const EP_DICE = { 1: "1d8", 2: "1d10", 3: "1d12", 4: "1d15", 5: "1d18" };
 const EP_IGNORE_ARMOR = { 5: 3 };
 
-// --- COOLDOWN de cada ataque em frames (60 = 1 segundo) ---
-const COOLDOWN = { dmgRanged: 18, dmgMagic: 40, dmgMelee: 30 };
+// COOLDOWN GLOBAL: um só pra todos os ataques (em frames; 60 = 1s)
+const GLOBAL_COOLDOWN = 28;
 
-// --- INPUTS ---
 addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 addEventListener("keyup",   e => keys[e.key.toLowerCase()] = false);
 
@@ -41,33 +40,28 @@ addEventListener("mousemove", e => {
   players.me.mouse = { x: e.clientX, y: e.clientY };
 });
 
-// Ataques (1/2/3) + carregar nitro com Shift
 addEventListener("keydown", e => {
   const p = players.me;
 
-  // NITRO: Shift + tecla apenas CARREGA EP (só dano, NÃO mexe em velocidade/escala)
+  // NITRO: Shift + 1/2/3 carrega EP (só dano + visual, sem velocidade)
   if (e.shiftKey && ["1", "2", "3"].includes(e.key)) {
-    if (p.epCharge < 5 && p.sheet.ep > p.epCharge) {
+    if (p.epCharge < 5 && p.epCharge < p.sheet.ep) {
       p.epCharge++;
       showText(p, `EP CARREGADO: ${p.epCharge}`, "#39f");
-      p.flash = 0.5; // só um brilho azul, sem squash nem velocidade
+      p.flash = 0.5;
+    } else if (p.sheet.ep <= 0) {
+      showText(p, "SEM EP", "#f55");
     }
     return;
   }
 
-  // Ataques respeitam cooldown
-  if (e.key === "1" && p.cd.dmgRanged <= 0) {
-    playAttack(p); shoot(p, "dmgRanged", "#ff0", 9); p.cd.dmgRanged = COOLDOWN.dmgRanged;
-  }
-  if (e.key === "2" && p.cd.dmgMagic <= 0) {
-    playAttack(p); shoot(p, "dmgMagic", "#a0f", 6); p.cd.dmgMagic = COOLDOWN.dmgMagic;
-  }
-  if (e.key === "3" && p.cd.dmgMelee <= 0) {
-    playAttack(p); melee(p); p.cd.dmgMelee = COOLDOWN.dmgMelee;
-  }
+  // Ataques agora usam UM cooldown global compartilhado
+  if (p.atkCd > 0) return;
+  if (e.key === "1") { playAttack(p); shoot(p, "dmgRanged", "#ff0", 9); p.atkCd = GLOBAL_COOLDOWN; }
+  if (e.key === "2") { playAttack(p); shoot(p, "dmgMagic",  "#a0f", 6); p.atkCd = GLOBAL_COOLDOWN; }
+  if (e.key === "3") { playAttack(p); melee(p);                          p.atkCd = GLOBAL_COOLDOWN; }
 });
 
-// DASH (espaço) — Agilidade decide o dash perfeito (i-frames)
 addEventListener("keydown", e => {
   if (e.code !== "Space") return;
   const p = players.me;
@@ -86,7 +80,6 @@ addEventListener("keydown", e => {
   }
 });
 
-// Debug: B troca bot, R reseta
 addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "b") {
     botState.mode = (botState.mode + 1) % 3;
@@ -96,7 +89,6 @@ addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "r") resetDuel();
 });
 
-// --- AÇÕES ---
 function angleTo(p) { return Math.atan2(p.mouse.y - p.y, p.mouse.x - p.x); }
 
 function shoot(p, dmgKey, color, speed) {
@@ -104,20 +96,18 @@ function shoot(p, dmgKey, color, speed) {
   const charge = p.epCharge || 0;
   projectiles.push({
     x: p.x, y: p.y, dx: Math.cos(a) * speed, dy: Math.sin(a) * speed,
-    color, owner: p, dmgKey, r: 8 + charge * 5, // projétil cresce com o EP
-    charge
+    color, owner: p, dmgKey, r: 8 + charge * 5, charge
   });
-  if (charge > 0) { p.sheet.ep -= charge; p.epCharge = 0; } // consome EP no disparo
+  if (charge > 0) { p.sheet.ep -= charge; p.epCharge = 0; }
 }
 
 function melee(p) {
   const a = angleTo(p);
   const charge = p.epCharge || 0;
-  melees.push({ owner: p, angle: a, life: 9, range: 60 + charge * 12, charge }); // alcance cresce com EP
+  melees.push({ owner: p, angle: a, life: 9, range: 60 + charge * 12, charge });
   if (charge > 0) { p.sheet.ep -= charge; p.epCharge = 0; }
 }
 
-// --- ANIMAÇÕES ---
 function playHurt(target, fromX, fromY) {
   target.flash = 1;
   target.shake = 12;
@@ -145,11 +135,10 @@ function updateAnims() {
     p.ky = lerp(p.ky, 0, 0.3);
     if (p.dashCd > 0) p.dashCd--;
     if (p.iframes > 0) p.iframes--;
-    for (const k in p.cd) if (p.cd[k] > 0) p.cd[k]--; // decrementa cooldowns
+    if (p.atkCd > 0) p.atkCd--; // decrementa o cooldown global
   }
 }
 
-// --- TEXTOS FLUTUANTES ---
 function showText(p, text, color) {
   floats.push({ x: p.x, y: p.y - 30, text, color, life: 40 });
 }
@@ -167,21 +156,17 @@ function drawFloats() {
   }
 }
 
-// --- COMBATE ---
 function resolveHit(attacker, target, dmgKey, charge = 0) {
   if (target.iframes > 0) { showText(target, "DODGE", "#0ff"); return; }
-
   const hit = rollHit(attacker.sheet, target.sheet);
   if (!hit.hit) { showText(target, "MISS", "#fff"); return; }
 
   let dmg = rollFormula(attacker.sheet[dmgKey]).total;
-
   let ignoreArmor = 0;
   if (charge > 0) {
-    dmg += rollFormula(EP_DICE[charge]).total; // escala de poder soma dano
+    dmg += rollFormula(EP_DICE[charge]).total;
     ignoreArmor = EP_IGNORE_ARMOR[charge] || 0;
   }
-
   const armor = Math.max(0, (target.sheet.armor || 0) - ignoreArmor);
   const final = Math.max(0, dmg - armor);
   target.sheet.hp -= final;
@@ -211,8 +196,7 @@ function resetDuel() {
     const p = players[id];
     p.sheet.hp = p.sheet.hpMax;
     p.sheet.ep = p.sheet.epMax;
-    p.epCharge = 0; p.iframes = 0; p.dashCd = 0;
-    p.cd = { dmgRanged: 0, dmgMagic: 0, dmgMelee: 0 };
+    p.epCharge = 0; p.iframes = 0; p.dashCd = 0; p.atkCd = 0;
   }
   players.me.x = 300; players.me.y = 400;
   players.foe.x = 900; players.foe.y = 400;
@@ -220,7 +204,6 @@ function resetDuel() {
   loop();
 }
 
-// --- DESENHO ---
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -261,7 +244,6 @@ function draw() {
     ctx.restore();
     ctx.globalAlpha = 1;
 
-    // Indicador de EP carregado (anel azul + texto), bem visível
     if (p.epCharge > 0) {
       ctx.strokeStyle = "#39f"; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(p.x, p.y, 20 + p.epCharge * 4, 0, 7); ctx.stroke();
@@ -273,7 +255,8 @@ function draw() {
   }
 
   const me = players.me, a = angleTo(me);
-  ctx.fillStyle = "#fff";
+  // mira muda de cor quando o ataque está em cooldown (feedback visual)
+  ctx.fillStyle = me.atkCd > 0 ? "#888" : "#fff";
   ctx.beginPath(); ctx.arc(me.x + Math.cos(a) * 34, me.y + Math.sin(a) * 34, 5, 0, 7); ctx.fill();
 
   drawFloats();
@@ -294,14 +277,13 @@ function drawDebugHud() {
   const me = players.me, foe = players.foe;
   document.querySelector("#hud").innerHTML = `
     <b>MODO TESTE</b><br>
-    Você: HP ${me.sheet.hp}/${me.sheet.hpMax} | EP total ${me.sheet.ep} | <span style="color:#6cf">EP carregado: ${me.epCharge}</span><br>
+    Você: HP ${me.sheet.hp}/${me.sheet.hpMax} | EP total ${me.sheet.ep} | <span style="color:#6cf">EP carregado: ${me.epCharge}</span> | CD ${me.atkCd > 0 ? "🔴" : "🟢"}<br>
     Bot: HP ${foe.sheet.hp}/${foe.sheet.hpMax} | Modo ${botState.mode}<br>
-    <small>WASD mover · Mouse mirar · 1/2/3 atacar · Shift+ataque carrega EP</small><br>
+    <small>WASD mover · Mouse mirar · 1/2/3 atacar (cooldown único) · Shift+ataque carrega EP</small><br>
     <small>Espaço dash · B troca bot · R reseta</small>
   `;
 }
 
-// --- LOOP PRINCIPAL (60fps) ---
 function loop() {
   if (gameOver) return;
 
@@ -311,7 +293,7 @@ function loop() {
   if (keys.s) me.y += s;
   if (keys.a) me.x -= s;
   if (keys.d) me.x += s;
-  me.x = Math.max(18, Math.min(canvas.width - 18, me.x)); // trava bordas
+  me.x = Math.max(18, Math.min(canvas.width - 18, me.x));
   me.y = Math.max(18, Math.min(canvas.height - 18, me.y));
 
   updateBot(players.foe, players.me, shoot, melee, canvas);
@@ -335,7 +317,7 @@ function loop() {
     const dist = Math.hypot(target.x - mlee.owner.x, target.y - mlee.owner.y);
     if (dist < mlee.range) {
       resolveHit(mlee.owner, target, "dmgMelee", mlee.charge || 0);
-      mlee.charge = 0; // evita aplicar o bônus de EP várias vezes durante o golpe
+      mlee.charge = 0;
     }
     if (--mlee.life <= 0) melees.splice(i, 1);
   }
