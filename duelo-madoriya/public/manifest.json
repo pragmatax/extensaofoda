@@ -1,0 +1,12 @@
+{
+  "name": "Duelo Madoriya",
+  "version": "1.0.0",
+  "manifest_version": 1,
+  "action": {
+    "title": "Duelo Madoriya",
+    "icon": "./icon.svg",
+    "popover": "./index.html",
+    "width": 420,
+    "height": 600
+  }
+}
