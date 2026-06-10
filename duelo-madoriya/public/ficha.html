@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Ficha</title>
+  <style>
+    body { font-family: sans-serif; background: #1a1a2e; color: #eee; margin: 0; padding: 12px; font-size: 13px; }
+    h3 { margin: 6px 0; color: #e94560; }
+    label { display: flex; justify-content: space-between; align-items: center; margin: 3px 0; gap: 8px; }
+    input { width: 70px; background: #0f0f1e; border: 1px solid #444; color: #fff; padding: 3px; border-radius: 4px; }
+    input.formula { width: 110px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
+    .row { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
+    button { width: 100%; padding: 8px; margin-top: 10px; background: #e94560; color: #fff;
+             border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    hr { border-color: #333; }
+    .atk { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h3 id="title">Ficha</h3>
+
+  <div class="grid">
+    <label>HP <input id="hp" type="number"></label>
+    <label>HP Máx <input id="hpMax" type="number"></label>
+    <label>Armor <input id="armor" type="number"></label>
+    <label>Velocidade <input id="speed" type="number"></label>
+    <label>EP <input id="ep" type="number"></label>
+    <label>EP Máx <input id="epMax" type="number"></label>
+  </div>
+
+  <h3>Atributos</h3>
+  <div class="grid">
+    <label>Combate <input id="combate" type="number"></label>
+    <label>Agilidade <input id="agility" type="number"></label>
+    <label>Mira <input id="mira" type="number"></label>
+    <label>Eloquência <input id="eloquencia" type="number"></label>
+    <label>Dedução <input id="deducao" type="number"></label>
+    <label>Inteligência <input id="inteligencia" type="number"></label>
+    <label>F. Vontade <input id="vontade" type="number"></label>
+    <label>Resistência <input id="resistencia" type="number"></label>
+  </div>
+
+  <h3>Danos (fórmula livre: 1d6+2, 1d10...)</h3>
+  <label>Físico <input id="dmgMelee" class="formula"></label>
+  <label>Tiro <input id="dmgRanged" class="formula"></label>
+  <label>Magia <input id="dmgMagic" class="formula"></label>
+
+  <h3>Ataques no duelo (marque 2)</h3>
+  <div class="atk">
+    <div class="row"><input type="checkbox" id="ck_dmgMelee"> Físico (esq/dir)</div>
+    <div class="row"><input type="checkbox" id="ck_dmgRanged"> Tiro</div>
+    <div class="row"><input type="checkbox" id="ck_dmgMagic"> Magia</div>
+    <small id="atkWarn" style="color:#fa0;"></small>
+  </div>
+
+  <button id="save">Salvar Ficha</button>
+
+  <script type="module" src="./ficha.js"></script>
+</body>
+</html>
