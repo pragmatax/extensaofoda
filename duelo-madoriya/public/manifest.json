@@ -5,8 +5,8 @@
   "action": {
     "title": "Duelo Madoriya",
     "icon": "/icon.svg",
-    "popover": "/arena.html",
-    "width": 1280,
-    "height": 720
+    "popover": "/index.html",
+    "width": 400,
+    "height": 500
   }
 }
