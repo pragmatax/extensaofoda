@@ -3,9 +3,9 @@ import OBR, {
   buildText,
   buildPath,
   Command,
-} from "https://esm.sh/@owlbear-rodeo/sdk";
+} from "@owlbear-rodeo/sdk";
 
-import { getSheet } from "./sheet.js";
+import { getSheet, META_KEY } from "./sheet.js";
 
 const BAR_META = "com.duelo-madoriya/bar";
 
@@ -210,27 +210,47 @@ function buildFor(item) {
   return out;
 }
 
+// Ids das barras que NÓS criamos no último build. Guardar isso evita ter de
+// varrer a cena toda e, principalmente, deixa a gente adicionar as novas antes
+// de apagar as antigas (sem o "frame vazio" que causava a piscada).
+let _ownedBarIds = [];
+
+// Enquanto estamos mexendo na cena (add/delete das barras), o próprio OBR dispara
+// onChange. Sem essa trava, o watcher reagia às nossas próprias mudanças e entrava
+// num loop de delete+recreate -> barras piscando sem parar.
+let _busy = false;
+
 export async function createBars(tokenIds) {
-  await clearBars();
+  if (_busy) return;
+  _busy = true;
+  try {
+    const items = await OBR.scene.items.getItems(tokenIds);
+    const built = [];
+    for (const it of items) built.push(...buildFor(it));
 
-  const items = await OBR.scene.items.getItems(tokenIds);
-  const built = [];
+    const oldIds = _ownedBarIds;
 
-  for (const it of items) {
-    built.push(...buildFor(it));
-  }
+    // Adiciona as novas ANTES de remover as velhas: nunca há um instante sem barra.
+    if (built.length) await OBR.scene.items.addItems(built);
+    _ownedBarIds = built.map((b) => b.id);
 
-  if (built.length) {
-    await OBR.scene.items.addItems(built);
+    if (oldIds.length) await OBR.scene.items.deleteItems(oldIds);
+  } finally {
+    // Pequeno respiro pra absorver o onChange gerado pelo nosso próprio add/delete.
+    setTimeout(() => { _busy = false; }, 60);
   }
 }
 
 export async function clearBars() {
-  const all = await OBR.scene.items.getItems();
-  const ids = all.filter((it) => it.metadata?.[BAR_META]).map((it) => it.id);
-
-  if (ids.length) {
-    await OBR.scene.items.deleteItems(ids);
+  const wasBusy = _busy;
+  _busy = true;
+  try {
+    const all = await OBR.scene.items.getItems();
+    const ids = all.filter((it) => it.metadata?.[BAR_META]).map((it) => it.id);
+    if (ids.length) await OBR.scene.items.deleteItems(ids);
+    _ownedBarIds = [];
+  } finally {
+    if (!wasBusy) setTimeout(() => { _busy = false; }, 60);
   }
 }
 
@@ -238,28 +258,49 @@ export async function refreshBars(tokenIds) {
   await createBars(tokenIds);
 }
 
-async function getBarredTokenIds() {
-  const all = await OBR.scene.items.getItems();
-  const ids = new Set();
-  for (const it of all) {
+// Gera uma "assinatura" do que importa pra desenhar a barra (posição, escala e
+// ficha de cada token-pai). Só reconstruímos quando essa assinatura muda — assim
+// mover a câmera, selecionar, ou qualquer mudança irrelevante não repinta nada.
+function signatureFromItems(items) {
+  const parents = new Map();
+  for (const it of items) {
     const parent = it.metadata?.[BAR_META]?.parent;
-    if (parent) ids.add(parent);
+    if (parent) parents.set(parent, true);
   }
-  return [...ids];
+  const sig = [];
+  for (const it of items) {
+    if (!parents.has(it.id)) continue;
+    const s = it.metadata?.[META_KEY] || {};
+    sig.push([
+      it.id,
+      Math.round(it.position?.x ?? 0),
+      Math.round(it.position?.y ?? 0),
+      it.scale?.x ?? 1,
+      it.scale?.y ?? 1,
+      s.hp, s.hpMax, s.ep, s.epMax, s.armor,
+    ].join(":"));
+  }
+  return { ids: [...parents.keys()], sig: sig.sort().join("|") };
 }
 
 let _watching = false;
 let _refreshTimer = null;
+let _lastSig = "";
 
 export function watchBars() {
   if (_watching) return;
   _watching = true;
 
-  OBR.scene.items.onChange(() => {
+  OBR.scene.items.onChange((items) => {
+    if (_busy) return;
     clearTimeout(_refreshTimer);
     _refreshTimer = setTimeout(async () => {
-      const ids = await getBarredTokenIds();
-      if (ids.length) await createBars(ids);
+      if (_busy) return;
+      const { ids, sig } = signatureFromItems(items);
+      if (!ids.length) { _lastSig = ""; return; }
+      if (sig === _lastSig) return; // nada relevante mudou -> não repinta
+      _lastSig = sig;
+      await createBars(ids);
     }, 150);
   });
 }
