@@ -50,7 +50,7 @@ function makeCircle(cx, cy, r, color, parentId) {
       .shapeType("CIRCLE")
       .width(r * 2)
       .height(r * 2)
-      .position({ x: cx, y: cy }) // <- aqui está a correção
+      .position({ x: cx, y: cy })
       .fillColor(color)
       .fillOpacity(FILL_OP)
       .strokeColor("#ffffff")
@@ -58,36 +58,6 @@ function makeCircle(cx, cy, r, color, parentId) {
       .strokeWidth(1.5),
     parentId
   ).build();
-}
-
-function makeBadgeText(cx, cy, txt, parentId, r) {
-  const box = r * 2;
-  const fontSize = Math.max(13, r * 1.1);
-
-  return buildText()
-    .richText([
-      {
-        type: "paragraph",
-        children: [{ text: String(txt), bold: true }],
-      },
-    ])
-    .fontSize(fontSize)
-    .fontWeight(700)
-    .fillColor("#ffffff")
-    .textAlign("CENTER")
-    .textAlignVertical("MIDDLE")
-    .width(box)
-    .height(box)
-    .position({
-      x: cx - box / 2,
-      y: cy - box / 2 - 1, // pequeno ajuste visual
-    })
-    .attachedTo(parentId)
-    .layer("TEXT")
-    .locked(true)
-    .disableHit(true)
-    .metadata({ [BAR_META]: { parent: parentId } })
-    .build();
 }
 
 function makeText(cx, cy, txt, parentId, boxW, boxH = 22, fontSize = 13) {
@@ -144,8 +114,7 @@ function makeBadgeText(cx, cy, txt, parentId, r) {
     .build();
 }
 
-// Barra arredondada em UMA peça só.
-// Não usa mais círculo + retângulo, então não desalinha.
+// Barra arredondada em UMA peça só (path com cantos quad).
 function makePill(x, y, w, h, color, parentId) {
   const r = h / 2;
   const right = x + w;
@@ -157,15 +126,11 @@ function makePill(x, y, w, h, color, parentId) {
       .commands([
         [Command.MOVE, x + r, y],
         [Command.LINE, right - r, y],
-
         [Command.QUAD, right, y, right, cy],
         [Command.QUAD, right, bottom, right - r, bottom],
-
         [Command.LINE, x + r, bottom],
-
         [Command.QUAD, x, bottom, x, cy],
         [Command.QUAD, x, y, x + r, y],
-
         [Command.CLOSE],
       ])
       .fillColor(color)
@@ -187,13 +152,13 @@ function buildFor(item) {
   const r = Math.min(w, h) / 2;
   const out = [];
 
-  // Barra de HP igual ao print 2: centralizada, curta e colada no token.
-const hpW = Math.max(BASE_HP_W, r * 2.15);
-const hpH = clamp(r * 0.2, BASE_HP_H, 24);
+  // Barra de HP: centralizada, curta e colada no token.
+  const hpW = Math.max(BASE_HP_W, r * 2.15);
+  const hpH = clamp(r * 0.2, BASE_HP_H, 24);
 
-const hpX = cx - hpW / 2;
-const hpY = cy + r - hpH * 0.28;
-const hpCy = hpY + hpH / 2;
+  const hpX = cx - hpW / 2;
+  const hpY = cy + r - hpH * 0.28;
+  const hpCy = hpY + hpH / 2;
 
   const frac = clamp(s.hpMax ? s.hp / s.hpMax : 0, 0, 1);
 
@@ -223,11 +188,17 @@ const hpCy = hpY + hpH / 2;
   const dotR = clamp(r * 0.18, BASE_DOT_R, 18);
   const d = r * 0.78;
 
+  // posições nos cantos (centros das bolinhas)
+  const epX = cx - d, epY = cy - d;   // superior esquerdo
+  const arX = cx + d, arY = cy + d;   // inferior direito
+
   // EP — canto superior esquerdo
-out.push(makeBadgeText(epX, epY, s.ep ?? 0, item.id, dotR));
+  out.push(makeCircle(epX - dotR, epY - dotR, dotR, EP_COLOR, item.id));
+  out.push(makeBadgeText(epX, epY, s.ep ?? 0, item.id, dotR));
 
   // Armor — canto inferior direito
-out.push(makeBadgeText(arX, arY, s.armor ?? 0, item.id, dotR));
+  out.push(makeCircle(arX - dotR, arY - dotR, dotR, ARMOR_COLOR, item.id));
+  out.push(makeBadgeText(arX, arY, s.armor ?? 0, item.id, dotR));
 
   return out;
 }
