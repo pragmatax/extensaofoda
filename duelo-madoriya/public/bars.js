@@ -9,9 +9,12 @@ import { getSheet } from "./sheet.js";
 
 const BAR_META = "com.duelo-madoriya/bar";
 
-const BASE_HP_W = 118;
-const BASE_HP_H = 16;
+const BASE_HP_W = 138;
+const BASE_HP_H = 18;
 const BASE_DOT_R = 12;
+
+const DOT_TEXT_NUDGE_X = -2;
+const DOT_TEXT_NUDGE_Y = -2;
 
 const HP_FILL = "#ff4f58"; // vermelho clarinho
 const HP_BG = "#9e252d";   // vermelho escuro do fundo
@@ -81,6 +84,36 @@ function makeText(cx, cy, txt, parentId, boxW, boxH = 22, fontSize = 13) {
     .build();
 }
 
+function makeBadgeText(cx, cy, txt, parentId, r) {
+  const box = r * 2 + 4;
+  const fontSize = Math.max(13, r * 1.05);
+
+  return buildText()
+    .richText([
+      {
+        type: "paragraph",
+        children: [{ text: String(txt), bold: true }],
+      },
+    ])
+    .fontSize(fontSize)
+    .fontWeight(700)
+    .fillColor("#ffffff")
+    .textAlign("CENTER")
+    .textAlignVertical("MIDDLE")
+    .width(box)
+    .height(box)
+    .position({
+      x: cx - box / 2 + DOT_TEXT_NUDGE_X,
+      y: cy - box / 2 + DOT_TEXT_NUDGE_Y,
+    })
+    .attachedTo(parentId)
+    .layer("TEXT")
+    .locked(true)
+    .disableHit(true)
+    .metadata({ [BAR_META]: { parent: parentId } })
+    .build();
+}
+
 // Barra arredondada em UMA peça só.
 // Não usa mais círculo + retângulo, então não desalinha.
 function makePill(x, y, w, h, color, parentId) {
@@ -125,12 +158,12 @@ function buildFor(item) {
   const out = [];
 
   // Barra de HP igual ao print 2: centralizada, curta e colada no token.
-  const hpW = Math.max(BASE_HP_W, r * 1.75);
-  const hpH = clamp(r * 0.18, BASE_HP_H, 21);
+const hpW = Math.max(BASE_HP_W, r * 2.15);
+const hpH = clamp(r * 0.2, BASE_HP_H, 24);
 
-  const hpX = cx - hpW / 2;
-  const hpY = cy + r - hpH * 0.35;
-  const hpCy = hpY + hpH / 2;
+const hpX = cx - hpW / 2;
+const hpY = cy + r - hpH * 0.28;
+const hpCy = hpY + hpH / 2;
 
   const frac = clamp(s.hpMax ? s.hp / s.hpMax : 0, 0, 1);
 
