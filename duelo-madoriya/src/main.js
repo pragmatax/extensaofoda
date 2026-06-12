@@ -10,6 +10,8 @@ let role = "PLAYER";
 let selection = [];
 let bgUrl = "";
 let arenaOpen = false;
+let partyPlayers = [];        // jogadores conectados (pra atribuir controle)
+let assignment = ["", ""];    // playerId que controla cada lutador
 
 OBR.onReady(async () => {
   myId = OBR.player.id;
@@ -29,9 +31,13 @@ OBR.onReady(async () => {
   OBR.room.onMetadataChange((md) => syncArena(md[DUEL_META]));
   syncArena((await OBR.room.getMetadata())[DUEL_META]);
 
-  // Mantém a seleção atualizada (habilita/desabilita "Iniciar Duelo").
-  OBR.player.onChange(refreshSelection);
-  refreshSelection();
+  // Mantém a seleção e a lista de jogadores atualizadas.
+  if (role === "GM") {
+    OBR.player.onChange(refreshSelection);
+    OBR.party.onChange((players) => { partyPlayers = players; refreshSelection(); });
+    partyPlayers = await OBR.party.getPlayers();
+    refreshSelection();
+  }
 });
 
 /* ------------------------------------------------------------------ */
@@ -90,21 +96,66 @@ function wirePlayerPanel() {
 function wireGmPanel() {
   $("#pickBg").addEventListener("click", async () => {
     try {
-      const imgs = await OBR.assets.downloadImages(false, "", "MAP");
+      const imgs = await OBR.assets.downloadImages(false);
       const img = imgs?.[0];
-      if (img?.image?.url) {
-        bgUrl = img.image.url;
-        const prev = $("#bgPreview");
-        prev.src = bgUrl;
-        prev.style.display = "block";
-      }
+      if (img?.image?.url) setBg(img.image.url);
     } catch (e) {
-      OBR.notification.show("Não foi possível escolher o mapa.");
+      OBR.notification.show("Picker indisponível — cole a URL do mapa no campo abaixo.");
     }
+  });
+
+  $("#bgUrlInput").addEventListener("change", (e) => {
+    const url = e.target.value.trim();
+    if (url) setBg(url);
   });
 
   $("#start").addEventListener("click", startDuel);
   $("#stop").addEventListener("click", stopDuel);
+}
+
+function setBg(url) {
+  bgUrl = url;
+  const prev = $("#bgPreview");
+  prev.src = url;
+  prev.style.display = "block";
+  $("#bgUrlInput").value = url;
+}
+
+function playerName(id) {
+  if (id === myId) return "Você (mestre)";
+  const p = partyPlayers.find((x) => x.id === id);
+  return p ? p.name : "—";
+}
+
+// Monta os dois <select> de "quem controla cada lutador".
+function renderAssignment(chars) {
+  const box = $("#assign");
+  if (chars.length !== 2) { box.innerHTML = ""; return; }
+
+  // candidatos: o GM (você) + todos os jogadores conectados
+  const candidates = [{ id: myId, name: "Você (mestre)" }];
+  for (const p of partyPlayers) {
+    if (p.id !== myId) candidates.push({ id: p.id, name: p.name });
+  }
+
+  box.innerHTML = chars.map((it, i) => {
+    // padrão: quem criou o token, se estiver conectado; senão o mestre
+    const def = candidates.some((c) => c.id === it.createdUserId) ? it.createdUserId : myId;
+    if (!assignment[i]) assignment[i] = def;
+    const opts = candidates.map((c) =>
+      `<option value="${c.id}" ${c.id === assignment[i] ? "selected" : ""}>${c.name}</option>`
+    ).join("");
+    return `<div class="assignRow">
+      <span class="who" style="color:${FIGHTER_COLORS[i]}">${it.name || "Token"}</span>
+      <select data-slot="${i}">${opts}</select>
+    </div>`;
+  }).join("");
+
+  box.querySelectorAll("select").forEach((sel) => {
+    sel.addEventListener("change", (e) => {
+      assignment[+e.target.dataset.slot] = e.target.value;
+    });
+  });
 }
 
 async function refreshSelection() {
@@ -125,8 +176,8 @@ async function refreshSelection() {
     : "Selecione exatamente 2 tokens no mapa.";
 
   $("#start").disabled = n !== 2;
-  // guarda os tokens válidos pro start
   refreshSelection._chars = chars;
+  renderAssignment(chars);
 }
 
 async function startDuel() {
@@ -150,6 +201,7 @@ async function startDuel() {
     tokenId: it.id,
     name: it.name || `Lutador ${i + 1}`,
     ownerId: it.createdUserId,
+    controllerId: assignment[i] || it.createdUserId, // quem joga com este lutador
     color: FIGHTER_COLORS[i],
     sheet: getSheet(it),
   }));

@@ -33,6 +33,11 @@
     .pill { background: #0f0f1e; border: 1px solid #3a3a55; border-radius: 6px; padding: 4px 8px; }
     .checkrow { display: flex; align-items: center; gap: 8px; }
     .hidden { display: none !important; }
+    .assignRow { display: flex; align-items: center; justify-content: space-between;
+                 gap: 8px; margin-top: 8px; }
+    .assignRow .who { font-weight: 700; }
+    select { background: #0f0f1e; border: 1px solid #3a3a55; color: #fff;
+             padding: 5px; border-radius: 6px; max-width: 60%; }
   </style>
 </head>
 <body>
@@ -47,6 +52,7 @@
         <span id="selBadge" class="badge warn">0 / 2</span>
       </div>
       <div class="muted" id="selNames">Selecione exatamente 2 tokens no mapa.</div>
+      <div id="assign"></div>
     </div>
 
     <div class="card">
@@ -74,7 +80,9 @@
         <input id="training" type="checkbox" />
         <label for="training">Treino (1 lutador + bot)</label>
       </div>
-      <button id="pickBg" class="ghost" style="width:100%;margin-top:6px;">🗺️ Escolher mapa de fundo</button>
+      <button id="pickBg" class="ghost" style="width:100%;margin-top:6px;">🗺️ Escolher mapa da biblioteca</button>
+      <input id="bgUrlInput" type="text" placeholder="ou cole a URL de uma imagem de mapa"
+             style="width:100%;margin-top:6px;background:#0f0f1e;border:1px solid #3a3a55;color:#fff;padding:6px;border-radius:6px;" />
       <img id="bgPreview" alt="mapa de fundo" />
     </div>
 

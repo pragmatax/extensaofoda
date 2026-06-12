@@ -44,6 +44,7 @@ function makeFighter(slot, conf) {
     name: conf?.name || `Lutador ${slot + 1}`,
     color: conf?.color || FIGHTER_COLORS[slot],
     ownerId: conf?.ownerId,
+    controllerId: conf?.controllerId || conf?.ownerId,
     sheet: s,
     x: 0, y: 0, tx: 0, ty: 0,
     mouse: { x: 0, y: 0 },
@@ -110,8 +111,8 @@ function bootFromMetadata(duel) {
 
   for (let i = 0; i < 2; i++) fighters[i] = makeFighter(i, duel.fighters[i]);
 
-  // Qual lutador eu controlo?
-  mySlot = fighters.findIndex((f) => f.ownerId && f.ownerId === myId);
+  // Qual lutador eu controlo? (atribuição feita pelo GM no painel)
+  mySlot = fighters.findIndex((f) => f.controllerId && f.controllerId === myId);
   if (config.training && isHost) mySlot = 0; // GM testando sozinho
 
   placeFighters();
@@ -154,10 +155,18 @@ function broadcast(channel, data, dest = "REMOTE") {
   try { OBR.broadcast.sendMessage(channel, data, { destination: dest }); } catch (e) {}
 }
 
-function broadcastInput() {
-  if (mySlot < 0) return;
-  const f = fighters[mySlot];
-  broadcast(CH.INPUT, { slot: mySlot, x: f.x, y: f.y, mx: f.mouse.x, my: f.mouse.y });
+// Envia posição/mira no MÁXIMO ~18x/seg por lutador. Os outros clientes
+// interpolam (lerp) entre os pacotes, então o movimento fica liso mesmo com
+// poucas mensagens — bem menos tráfego, sem o lag de mandar 60x/seg.
+const INPUT_INTERVAL = 55; // ms
+const _inputAt = {};
+function sendInput(slot) {
+  const f = fighters[slot];
+  if (!f) return;
+  const t = nowMs();
+  if (t - (_inputAt[slot] || 0) < INPUT_INTERVAL) return;
+  _inputAt[slot] = t;
+  broadcast(CH.INPUT, { slot, x: f.x, y: f.y, mx: f.mouse.x, my: f.mouse.y });
 }
 
 // Dispara um ataque: aplica localmente e avisa os outros.
@@ -241,35 +250,46 @@ addEventListener("mousemove", (e) => {
   fighters[mySlot].mouse = { x: e.clientX, y: e.clientY };
 });
 
-addEventListener("keydown", (e) => {
-  if (mySlot < 0 || roundOver || matchOver) return;
+// Cada poder da ficha (dmgMelee / dmgRanged / dmgMagic) vira um projétil ou golpe.
+function fireSpec(dmgKey) {
+  if (dmgKey === "dmgMelee") return { kind: "melee" };
+  if (dmgKey === "dmgMagic") return { kind: "magic", color: "#a0f", speed: 6 };
+  return { kind: "ranged", color: "#ff0", speed: 9 }; // dmgRanged
+}
+
+function doAttack(dmgKey) {
   const p = fighters[mySlot];
-
-  if (e.shiftKey && ["1", "2", "3"].includes(e.key)) {
-    if (p.epCharge < 5 && p.epCharge < (p.sheet.ep || 0)) {
-      p.epCharge++;
-      showText(p, `EP ${p.epCharge}`, "#39f");
-      p.flash = 0.5;
-    } else if ((p.sheet.ep || 0) <= 0) {
-      showText(p, "SEM EP", "#f55");
-    }
-    return;
-  }
-
-  if (p.atkCd > 0) return;
+  if (!p || p.atkCd > 0) return;
   const a = angleTo(p);
   const charge = p.epCharge || 0;
+  emitFire({ slot: mySlot, dmgKey, angle: a, x: p.x, y: p.y, charge, ...fireSpec(dmgKey) });
+  p.atkCd = GLOBAL_COOLDOWN;
+  p.epCharge = 0;
+}
 
-  if (e.key === "1") {
-    emitFire({ slot: mySlot, kind: "ranged", dmgKey: "dmgRanged", color: "#ff0", speed: 9, angle: a, x: p.x, y: p.y, charge });
-    p.atkCd = GLOBAL_COOLDOWN; p.epCharge = 0;
-  } else if (e.key === "2") {
-    emitFire({ slot: mySlot, kind: "magic", dmgKey: "dmgMagic", color: "#a0f", speed: 6, angle: a, x: p.x, y: p.y, charge });
-    p.atkCd = GLOBAL_COOLDOWN; p.epCharge = 0;
-  } else if (e.key === "3") {
-    emitFire({ slot: mySlot, kind: "melee", dmgKey: "dmgMelee", angle: a, charge });
-    p.atkCd = GLOBAL_COOLDOWN; p.epCharge = 0;
+function chargeEp() {
+  const p = fighters[mySlot];
+  if (!p) return;
+  if (p.epCharge < 5 && p.epCharge < (p.sheet.ep || 0)) {
+    p.epCharge++;
+    showText(p, `EP ${p.epCharge}`, "#39f");
+    p.flash = 0.5;
+  } else if ((p.sheet.ep || 0) <= 0) {
+    showText(p, "SEM EP", "#f55");
   }
+}
+
+// não deixa o menu do botão direito abrir dentro da arena
+addEventListener("contextmenu", (e) => e.preventDefault());
+
+addEventListener("mousedown", (e) => {
+  if (mySlot < 0 || roundOver || matchOver) return;
+  const p = fighters[mySlot];
+  p.mouse = { x: e.clientX, y: e.clientY }; // mira no ponto do clique
+  // botão esquerdo = poder 1 (atk1) · botão direito = poder 2 (atk2)
+  const dmgKey = e.button === 2 ? (p.sheet.atk2 || "dmgMelee") : (p.sheet.atk1 || "dmgRanged");
+  if (e.shiftKey) { chargeEp(); return; }   // Shift+clique carrega EP
+  doAttack(dmgKey);
 });
 
 addEventListener("keydown", (e) => {
@@ -430,7 +450,7 @@ function update() {
     if (keys.a) me.x -= s;
     if (keys.d) me.x += s;
     clampToArena(me);
-    broadcastInput();
+    sendInput(mySlot);
   }
 
   // bot de treino: host controla o lutador 1
@@ -442,9 +462,10 @@ function update() {
     const f = fighters[i];
     if (!f) continue;
     if (!isLocalSlot(i)) {
-      // lutadores que não controlo localmente vêm suavizados da rede
-      f.x = lerp(f.x, f.tx, 0.35);
-      f.y = lerp(f.y, f.ty, 0.35);
+      // lutadores que não controlo localmente vêm suavizados da rede.
+      // fator menor = glide mais contínuo entre os pacotes (que agora são ~18/s)
+      f.x = lerp(f.x, f.tx, 0.22);
+      f.y = lerp(f.y, f.ty, 0.22);
     }
   }
 
@@ -524,7 +545,7 @@ function runBot(foe, me) {
   const r = arenaRect();
   updateBot(foe, me, shoot, melee, { width: r.right, height: r.bottom });
   clampToArena(foe);
-  broadcast(CH.INPUT, { slot: foe.slot, x: foe.x, y: foe.y, mx: foe.mouse.x, my: foe.mouse.y });
+  sendInput(foe.slot);
 }
 
 /* ------------------------------ anim ------------------------------- */
@@ -672,7 +693,7 @@ function drawHud() {
   document.querySelector("#hud").innerHTML = `
     <b>${roleTxt}</b>${host}<br>
     ${extra}<br>
-    <small>${mySlot >= 0 ? "WASD mover · Mouse mirar · 1/2/3 atacar · Shift+ataque carrega EP · Espaço dash" : "Assistindo em tempo real"}</small>
+    <small>${mySlot >= 0 ? "WASD mover · Mouse mirar · Clique ESQ/DIR = poderes da ficha · Shift+clique carrega EP · Espaço dash" : "Assistindo em tempo real"}</small>
   `;
 }
 
