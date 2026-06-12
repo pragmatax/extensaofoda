@@ -1,5 +1,4 @@
 import OBR from "@owlbear-rodeo/sdk";
-import { createBars, clearBars } from "../public/bars.js";
 import { createBars, clearBars, watchBars } from "../public/bars.js";
 
 OBR.onReady(() => {
