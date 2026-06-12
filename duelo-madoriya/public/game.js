@@ -39,7 +39,7 @@ function makeFighter(slot, conf) {
   const s = { ...getSheet({ metadata: {} }), ...(conf?.sheet || {}) };
   if (!s.epMax || s.epMax < 1) s.epMax = 5;
   if (s.ep == null) s.ep = s.epMax;
-  return {
+  const f = {
     slot,
     name: conf?.name || `Lutador ${slot + 1}`,
     color: conf?.color || FIGHTER_COLORS[slot],
@@ -50,7 +50,16 @@ function makeFighter(slot, conf) {
     mouse: { x: 0, y: 0 },
     scaleX: 1, scaleY: 1, flash: 0, shake: 0, charge: 0, kx: 0, ky: 0,
     epCharge: 0, iframes: 0, dashCd: 0, atkCd: 0,
+    img: null, imgReady: false,
   };
+  // Carrega a imagem do token (se houver) pra desenhar no lugar da bolinha.
+  if (conf?.imageUrl) {
+    const im = new Image();
+    im.onload = () => { f.imgReady = true; };
+    im.src = conf.imageUrl;
+    f.img = im;
+  }
+  return f;
 }
 
 function arenaRect() {
@@ -615,11 +624,28 @@ function draw() {
     ctx.globalAlpha = p.iframes > 0 ? 0.4 + 0.3 * Math.sin(nowMs() / 40) : 1;
     ctx.translate(p.x + sx, p.y + sy);
     ctx.scale(p.scaleX, p.scaleY);
-    ctx.fillStyle = p.color;
-    ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.fill();
+    const R = 18;
+    if (p.imgReady && p.img) {
+      // imagem do token recortada num círculo
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.clip();
+      // "cover": preenche o círculo sem esticar (mantém a proporção)
+      const iw = p.img.naturalWidth || R * 2, ih = p.img.naturalHeight || R * 2;
+      const sc = Math.max((R * 2) / iw, (R * 2) / ih);
+      const dw = iw * sc, dh = ih * sc;
+      ctx.drawImage(p.img, -dw / 2, -dh / 2, dw, dh);
+      ctx.restore();
+    } else {
+      // fallback: bolinha colorida enquanto a imagem não carrega / não existe
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fill();
+    }
+    // anel da cor do lutador (identifica os lados)
+    ctx.strokeStyle = p.color; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
     if (p.flash > 0.05) {
       ctx.fillStyle = `rgba(255,255,255,${p.flash})`;
-      ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fill();
     }
     ctx.restore();
     ctx.globalAlpha = 1;

@@ -203,6 +203,7 @@ async function startDuel() {
     ownerId: it.createdUserId,
     controllerId: assignment[i] || it.createdUserId, // quem joga com este lutador
     color: FIGHTER_COLORS[i],
+    imageUrl: it.image?.url || "",                   // imagem do token na arena
     sheet: getSheet(it),
   }));
 
