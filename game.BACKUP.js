@@ -1,4 +1,3 @@
-import OBR from "https://esm.sh/@owlbear-rodeo/sdk";
 import { getSheet } from "./sheet.js";
 import { rollHit, rollFormula } from "./dice.js";
 import { lerp } from "./anim.js";
@@ -8,15 +7,14 @@ const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 canvas.width = innerWidth; canvas.height = innerHeight;
 
-let myId = "local";
-
 function makeFighter(x, y, color) {
   const s = { ...getSheet({ metadata: {} }) };
+  // MODO TESTE: garante EP pra testar o nitro mesmo se a ficha vier zerada
   if (!s.epMax || s.epMax < 5) { s.epMax = 5; s.ep = 5; }
   return {
     x, y, color, sheet: s, mouse: { x, y },
     scaleX: 1, scaleY: 1, flash: 0, shake: 0, charge: 0, kx: 0, ky: 0,
-    epCharge: 0, iframes: 0, dashCd: 0, atkCd: 0
+    epCharge: 0, iframes: 0, dashCd: 0, atkCd: 0   // atkCd = cooldown GLOBAL
   };
 }
 const players = {
@@ -32,6 +30,7 @@ let gameOver = false;
 const EP_DICE = { 1: "1d8", 2: "1d10", 3: "1d12", 4: "1d15", 5: "1d18" };
 const EP_IGNORE_ARMOR = { 5: 3 };
 
+// COOLDOWN GLOBAL: um só pra todos os ataques (em frames; 60 = 1s)
 const GLOBAL_COOLDOWN = 28;
 
 addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
@@ -43,6 +42,8 @@ addEventListener("mousemove", e => {
 
 addEventListener("keydown", e => {
   const p = players.me;
+
+  // NITRO: Shift + 1/2/3 carrega EP (só dano + visual, sem velocidade)
   if (e.shiftKey && ["1", "2", "3"].includes(e.key)) {
     if (p.epCharge < 5 && p.epCharge < p.sheet.ep) {
       p.epCharge++;
@@ -53,6 +54,8 @@ addEventListener("keydown", e => {
     }
     return;
   }
+
+  // Ataques agora usam UM cooldown global compartilhado
   if (p.atkCd > 0) return;
   if (e.key === "1") { playAttack(p); shoot(p, "dmgRanged", "#ff0", 9); p.atkCd = GLOBAL_COOLDOWN; }
   if (e.key === "2") { playAttack(p); shoot(p, "dmgMagic",  "#a0f", 6); p.atkCd = GLOBAL_COOLDOWN; }
@@ -132,7 +135,7 @@ function updateAnims() {
     p.ky = lerp(p.ky, 0, 0.3);
     if (p.dashCd > 0) p.dashCd--;
     if (p.iframes > 0) p.iframes--;
-    if (p.atkCd > 0) p.atkCd--;
+    if (p.atkCd > 0) p.atkCd--; // decrementa o cooldown global
   }
 }
 
@@ -252,6 +255,7 @@ function draw() {
   }
 
   const me = players.me, a = angleTo(me);
+  // mira muda de cor quando o ataque está em cooldown (feedback visual)
   ctx.fillStyle = me.atkCd > 0 ? "#888" : "#fff";
   ctx.beginPath(); ctx.arc(me.x + Math.cos(a) * 34, me.y + Math.sin(a) * 34, 5, 0, 7); ctx.fill();
 
@@ -272,10 +276,10 @@ function drawBars(p) {
 function drawDebugHud() {
   const me = players.me, foe = players.foe;
   document.querySelector("#hud").innerHTML = `
-    <b>MODO TESTE</b> · <small>id: ${myId}</small><br>
+    <b>MODO TESTE</b><br>
     Você: HP ${me.sheet.hp}/${me.sheet.hpMax} | EP total ${me.sheet.ep} | <span style="color:#6cf">EP carregado: ${me.epCharge}</span> | CD ${me.atkCd > 0 ? "🔴" : "🟢"}<br>
     Bot: HP ${foe.sheet.hp}/${foe.sheet.hpMax} | Modo ${botState.mode}<br>
-    <small>WASD mover · Mouse mirar · 1/2/3 atacar · Shift+ataque carrega EP</small><br>
+    <small>WASD mover · Mouse mirar · 1/2/3 atacar (cooldown único) · Shift+ataque carrega EP</small><br>
     <small>Espaço dash · B troca bot · R reseta</small>
   `;
 }
@@ -324,24 +328,4 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// --- Inicialização: dentro do Owlbear OU solto (teste) ---
-let started = false;
-function start() {
-  if (started) return;
-  started = true;
-  loop();
-}
-
-try {
-  OBR.onReady(() => {
-    myId = OBR.player.id;
-    OBR.notification.show("Arena conectada ao Owlbear!");
-    start();
-  });
-} catch (err) {
-  // rodando fora do Owlbear (página solta de teste)
-  start();
-}
-
-// fallback extra: se o OBR não inicializar em 1.5s, inicia mesmo assim
-setTimeout(start, 1500);
+loop();
