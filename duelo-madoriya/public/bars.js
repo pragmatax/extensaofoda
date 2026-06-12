@@ -13,11 +13,11 @@ const BASE_HP_W = 138;
 const BASE_HP_H = 18;
 const BASE_DOT_R = 12;
 
-const DOT_TEXT_NUDGE_X = -2;
-const DOT_TEXT_NUDGE_Y = -2;
+const DOT_TEXT_NUDGE_X = 0;
+const DOT_TEXT_NUDGE_Y = -1;
 
-const HP_FILL = "#ff4f58"; // vermelho clarinho
-const HP_BG = "#9e252d";   // vermelho escuro do fundo
+const HP_FILL = "#ff4f58";
+const HP_BG = "#9e252d";
 
 const EP_COLOR = "#2f8d73";
 const ARMOR_COLOR = "#4b73bd";
@@ -50,7 +50,10 @@ function makeCircle(cx, cy, r, color, parentId) {
       .shapeType("CIRCLE")
       .width(r * 2)
       .height(r * 2)
+
+      // Aqui o position é tratado como centro da bolinha
       .position({ x: cx, y: cy })
+
       .fillColor(color)
       .fillOpacity(FILL_OP)
       .strokeColor("#ffffff")
@@ -75,7 +78,10 @@ function makeText(cx, cy, txt, parentId, boxW, boxH = 22, fontSize = 13) {
     .textAlignVertical("MIDDLE")
     .width(boxW)
     .height(boxH)
+
+    // Texto usa posição no canto superior esquerdo da caixa
     .position({ x: cx - boxW / 2, y: cy - boxH / 2 })
+
     .attachedTo(parentId)
     .layer("TEXT")
     .locked(true)
@@ -86,7 +92,7 @@ function makeText(cx, cy, txt, parentId, boxW, boxH = 22, fontSize = 13) {
 
 function makeBadgeText(cx, cy, txt, parentId, r) {
   const box = r * 2 + 4;
-  const fontSize = Math.max(13, r * 1.05);
+  const fontSize = Math.max(15, r * 1.25);
 
   return buildText()
     .richText([
@@ -114,7 +120,6 @@ function makeBadgeText(cx, cy, txt, parentId, r) {
     .build();
 }
 
-// Barra arredondada em UMA peça só (path com cantos quad).
 function makePill(x, y, w, h, color, parentId) {
   const r = h / 2;
   const right = x + w;
@@ -152,7 +157,7 @@ function buildFor(item) {
   const r = Math.min(w, h) / 2;
   const out = [];
 
-  // Barra de HP: centralizada, curta e colada no token.
+  // Barra de HP
   const hpW = Math.max(BASE_HP_W, r * 2.15);
   const hpH = clamp(r * 0.2, BASE_HP_H, 24);
 
@@ -162,16 +167,13 @@ function buildFor(item) {
 
   const frac = clamp(s.hpMax ? s.hp / s.hpMax : 0, 0, 1);
 
-  // Fundo da barra
   out.push(makePill(hpX, hpY, hpW, hpH, HP_BG, item.id));
 
-  // Vida atual
   if (frac > 0) {
     const fillW = Math.max(hpH, hpW * frac);
     out.push(makePill(hpX, hpY, fillW, hpH, HP_FILL, item.id));
   }
 
-  // Texto do HP por cima
   out.push(
     makeText(
       cx,
@@ -180,24 +182,29 @@ function buildFor(item) {
       item.id,
       hpW,
       hpH + 6,
-      Math.max(13, hpH * 0.8)
+      Math.max(15, hpH * 0.95)
     )
   );
 
-  // Bolinhas de identificação
+  // Bolinhas
   const dotR = clamp(r * 0.18, BASE_DOT_R, 18);
-  const d = r * 0.78;
 
-  // posições nos cantos (centros das bolinhas)
-  const epX = cx - d, epY = cy - d;   // superior esquerdo
-  const arX = cx + d, arY = cy + d;   // inferior direito
+  // Distância do centro do token.
+  // 0.72 deixa mais parecido com o print 2, grudado na borda.
+  const d = r * 0.72;
+
+  const epX = cx - d;
+  const epY = cy - d;
+
+  const arX = cx + d;
+  const arY = cy + d;
 
   // EP — canto superior esquerdo
-  out.push(makeCircle(epX - dotR, epY - dotR, dotR, EP_COLOR, item.id));
+  out.push(makeCircle(epX, epY, dotR, EP_COLOR, item.id));
   out.push(makeBadgeText(epX, epY, s.ep ?? 0, item.id, dotR));
 
   // Armor — canto inferior direito
-  out.push(makeCircle(arX - dotR, arY - dotR, dotR, ARMOR_COLOR, item.id));
+  out.push(makeCircle(arX, arY, dotR, ARMOR_COLOR, item.id));
   out.push(makeBadgeText(arX, arY, s.armor ?? 0, item.id, dotR));
 
   return out;
