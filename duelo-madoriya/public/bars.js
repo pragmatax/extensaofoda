@@ -14,7 +14,7 @@ function tokenSize(item) {
 
 function makeRect(x, y, w, h, color, parentId) {
   return buildShape()
-    .shapeType("RECTANGLE")
+    .shapeType("ROUNDED_RECTANGLE")
     .width(Math.max(0.1, w)).height(h)
     .position({ x, y })
     .fillColor(color).fillOpacity(FILL_OP)
@@ -73,13 +73,12 @@ function buildFor(item) {
   // EP — bolinha amarela (canto superior esquerdo)
   const epX = cx - d, epY = cy - d;
   out.push(makeCircle(epX, epY, "#e0b020", item.id));
-  out.push(makeText(epX, epY, s.ep ?? 0, item.id));
+  out.push(makeText(epX, epY - 1, s.ep ?? 0, item.id));
 
   // Armor — bolinha azul (canto inferior direito)
   const arX = cx + d, arY = cy + d;
   out.push(makeCircle(arX, arY, "#2e6fdb", item.id));
-  out.push(makeText(arX, arY, s.armor ?? 0, item.id));
-
+  out.push(makeText(arX, arY - 1, s.armor ?? 0, item.id));
   return out;
 }
 
