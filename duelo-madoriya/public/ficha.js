@@ -1,12 +1,18 @@
-import OBR from "@owlbear-rodeo/sdk";
-import { getSheet, saveSheet } from "./sheet.js";
+import { getSheet } from "./sheet.js";
 
+const META_KEY = "com.duelo-madoriya/sheet";
 const id = new URLSearchParams(location.search).get("id");
 
 const NUM = ["hp","hpMax","armor","speed","ep","epMax",
   "combate","agility","mira","eloquencia","deducao","inteligencia","vontade","resistencia"];
 const TXT = ["dmgMelee","dmgRanged","dmgMagic"];
 const ATKS = ["dmgMelee","dmgRanged","dmgMagic"];
+
+async function saveSheet(itemId, sheet) {
+  await OBR.scene.items.updateItems([itemId], (items) => {
+    for (const it of items) it.metadata[META_KEY] = sheet;
+  });
+}
 
 OBR.onReady(async () => {
   const items = await OBR.scene.items.getItems([id]);
@@ -16,10 +22,8 @@ OBR.onReady(async () => {
   document.querySelector("#title").textContent = `Ficha: ${item?.name || "Token"}`;
   for (const k of NUM) document.querySelector(`#${k}`).value = s[k] ?? 0;
   for (const k of TXT) document.querySelector(`#${k}`).value = s[k] ?? "";
-
-  // Marca os 2 ataques salvos
-  if (s.atk1) document.querySelector(`#ck_${s.atk1}`).checked = true;
-  if (s.atk2) document.querySelector(`#ck_${s.atk2}`).checked = true;
+  if (s.atk1) { const e = document.querySelector(`#ck_${s.atk1}`); if (e) e.checked = true; }
+  if (s.atk2) { const e = document.querySelector(`#ck_${s.atk2}`); if (e) e.checked = true; }
 
   document.querySelector("#save").addEventListener("click", save);
 });
@@ -34,10 +38,8 @@ async function save() {
     document.querySelector("#atkWarn").textContent = "Marque exatamente 2 ataques.";
     return;
   }
-
   const items = await OBR.scene.items.getItems([id]);
   const s = getSheet(items[0]);
-
   for (const k of NUM) s[k] = +document.querySelector(`#${k}`).value;
   for (const k of TXT) s[k] = document.querySelector(`#${k}`).value;
   s.atk1 = checked[0];
