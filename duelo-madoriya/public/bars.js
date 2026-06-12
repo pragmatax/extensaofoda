@@ -2,7 +2,9 @@ import OBR, { buildShape, buildText } from "https://esm.sh/@owlbear-rodeo/sdk";
 import { getSheet } from "./sheet.js";
 
 const BAR_META = "com.duelo-madoriya/bar";
-const HP_W = 90, HP_H = 16, DOT_R = 13;
+const HP_W = 88, HP_H = 15, DOT_R = 12;
+const FILL_OP = 0.65;   // opacidade das cores
+const STROKE_OP = 0.45; // opacidade do contorno
 
 function tokenSize(item) {
   const w = (item.image?.image?.width || 150) * (item.scale?.x || 1);
@@ -15,8 +17,8 @@ function makeRect(x, y, w, h, color, parentId) {
     .shapeType("RECTANGLE")
     .width(Math.max(0.1, w)).height(h)
     .position({ x, y })
-    .fillColor(color).fillOpacity(1)
-    .strokeColor("#000000").strokeOpacity(0.6).strokeWidth(1)
+    .fillColor(color).fillOpacity(FILL_OP)
+    .strokeColor("#000000").strokeOpacity(STROKE_OP).strokeWidth(1)
     .attachedTo(parentId).layer("ATTACHMENT")
     .locked(true).disableHit(true)
     .metadata({ [BAR_META]: { parent: parentId } })
@@ -28,25 +30,23 @@ function makeCircle(cx, cy, color, parentId) {
     .shapeType("CIRCLE")
     .width(DOT_R * 2).height(DOT_R * 2)
     .position({ x: cx - DOT_R, y: cy - DOT_R })
-    .fillColor(color).fillOpacity(1)
-    .strokeColor("#000000").strokeOpacity(0.7).strokeWidth(2)
+    .fillColor(color).fillOpacity(FILL_OP)
+    .strokeColor("#ffffff").strokeOpacity(STROKE_OP).strokeWidth(1.5)
     .attachedTo(parentId).layer("ATTACHMENT")
     .locked(true).disableHit(true)
     .metadata({ [BAR_META]: { parent: parentId } })
     .build();
 }
 
-function makeText(cx, cy, txt, parentId) {
+function makeText(cx, cy, txt, parentId, boxW = DOT_R * 2) {
+  const boxH = 22;
   return buildText()
-    .richText([{
-      type: "paragraph",
-      children: [{ text: String(txt), bold: true }]
-    }])
-    .fontSize(14).fontWeight(700)
+    .richText([{ type: "paragraph", children: [{ text: String(txt), bold: true }] }])
+    .fontSize(13).fontWeight(700)
     .fillColor("#ffffff")
     .textAlign("CENTER").textAlignVertical("MIDDLE")
-    .width(DOT_R * 2).height(DOT_R * 2)
-    .position({ x: cx - DOT_R, y: cy - DOT_R })
+    .width(boxW).height(boxH)
+    .position({ x: cx - boxW / 2, y: cy - boxH / 2 })
     .attachedTo(parentId).layer("TEXT")
     .locked(true).disableHit(true)
     .metadata({ [BAR_META]: { parent: parentId } })
@@ -65,7 +65,7 @@ function buildFor(item) {
   const frac = Math.max(0, Math.min(1, s.hpMax ? s.hp / s.hpMax : 0));
   out.push(makeRect(hpX, hpY, HP_W, HP_H, "#5a0000", item.id));
   out.push(makeRect(hpX, hpY, HP_W * frac, HP_H, "#e23b3b", item.id));
-  out.push(makeText(cx, hpY + HP_H / 2, `${s.hp}/${s.hpMax}`, item.id));
+    out.push(makeText(cx, hpY + HP_H / 2, `${s.hp}/${s.hpMax}`, item.id, HP_W));
 
   // posições nas "bordas" do token (45°), bem coladas
   const d = r * 0.72;
