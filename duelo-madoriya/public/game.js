@@ -9,6 +9,9 @@ const ctx = canvas.getContext("2d");
 canvas.width = innerWidth; canvas.height = innerHeight;
 
 let myId = "local";
+let TRAINING = false;          // false = PvP online, true = bot de treino
+let foeConnected = false;      // recebeu mensagem do oponente?
+const SYNC = "madoriya/sync";
 
 function makeFighter(x, y, color) {
   const s = { ...getSheet({ metadata: {} }) };
@@ -16,7 +19,8 @@ function makeFighter(x, y, color) {
   return {
     x, y, color, sheet: s, mouse: { x, y },
     scaleX: 1, scaleY: 1, flash: 0, shake: 0, charge: 0, kx: 0, ky: 0,
-    epCharge: 0, iframes: 0, dashCd: 0, atkCd: 0
+    epCharge: 0, iframes: 0, dashCd: 0, atkCd: 0,
+    tx: x, ty: y // posição-alvo da rede (pra suavizar)
   };
 }
 const players = {
@@ -31,7 +35,6 @@ let gameOver = false;
 
 const EP_DICE = { 1: "1d8", 2: "1d10", 3: "1d12", 4: "1d15", 5: "1d18" };
 const EP_IGNORE_ARMOR = { 5: 3 };
-
 const GLOBAL_COOLDOWN = 28;
 
 addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
@@ -78,6 +81,10 @@ addEventListener("keydown", e => {
 });
 
 addEventListener("keydown", e => {
+  if (e.key.toLowerCase() === "t") {
+    TRAINING = !TRAINING;
+    showText(players.me, TRAINING ? "MODO TREINO (BOT)" : "MODO PVP", "#0ff");
+  }
   if (e.key.toLowerCase() === "b") {
     botState.mode = (botState.mode + 1) % 3;
     const nomes = ["PARADO", "ANDANDO", "REVIDA"];
@@ -157,7 +164,6 @@ function resolveHit(attacker, target, dmgKey, charge = 0) {
   if (target.iframes > 0) { showText(target, "DODGE", "#0ff"); return; }
   const hit = rollHit(attacker.sheet, target.sheet);
   if (!hit.hit) { showText(target, "MISS", "#fff"); return; }
-
   let dmg = rollFormula(attacker.sheet[dmgKey]).total;
   let ignoreArmor = 0;
   if (charge > 0) {
@@ -176,7 +182,7 @@ function endDuel(winner) {
   if (gameOver) return;
   gameOver = true;
   const name = winner === players.me ? "VOCÊ" : "RIVAL";
-  if (typeof OBR !== "undefined") OBR.notification?.show?.(`${name} venceu o duelo!`);
+  OBR.notification?.show?.(`${name} venceu o duelo!`);
   const div = document.createElement("div");
   div.className = "victory";
   div.style.cssText = `position:fixed;inset:0;display:flex;align-items:center;
@@ -271,13 +277,28 @@ function drawBars(p) {
 
 function drawDebugHud() {
   const me = players.me, foe = players.foe;
+  const modo = TRAINING ? "🤖 TREINO" : (foeConnected ? "🟢 PVP CONECTADO" : "🟡 PVP aguardando oponente");
   document.querySelector("#hud").innerHTML = `
-    <b>MODO TESTE</b> · <small>id: ${myId}</small><br>
-    Você: HP ${me.sheet.hp}/${me.sheet.hpMax} | EP total ${me.sheet.ep} | <span style="color:#6cf">EP carregado: ${me.epCharge}</span> | CD ${me.atkCd > 0 ? "🔴" : "🟢"}<br>
-    Bot: HP ${foe.sheet.hp}/${foe.sheet.hpMax} | Modo ${botState.mode}<br>
+    <b>${modo}</b> · <small>id: ${myId}</small><br>
+    Você: HP ${me.sheet.hp}/${me.sheet.hpMax} | EP ${me.sheet.ep} | <span style="color:#6cf">carga: ${me.epCharge}</span> | CD ${me.atkCd > 0 ? "🔴" : "🟢"}<br>
+    Oponente: HP ${foe.sheet.hp}/${foe.sheet.hpMax}<br>
     <small>WASD mover · Mouse mirar · 1/2/3 atacar · Shift+ataque carrega EP</small><br>
-    <small>Espaço dash · B troca bot · R reseta</small>
+    <small>Espaço dash · T treino/pvp · B bot · R reseta</small>
   `;
+}
+
+// --- envio do meu estado pela rede ---
+function broadcastMe() {
+  if (TRAINING) return;
+  try {
+    OBR.broadcast.sendMessage(SYNC, {
+      id: myId,
+      x: players.me.x,
+      y: players.me.y,
+      mx: players.me.mouse.x,
+      my: players.me.mouse.y
+    }, { destination: "REMOTE" });
+  } catch (e) {}
 }
 
 function loop() {
@@ -292,7 +313,15 @@ function loop() {
   me.x = Math.max(18, Math.min(canvas.width - 18, me.x));
   me.y = Math.max(18, Math.min(canvas.height - 18, me.y));
 
-  updateBot(players.foe, players.me, shoot, melee, canvas);
+  if (TRAINING) {
+    updateBot(players.foe, players.me, shoot, melee, canvas);
+  } else {
+    // suaviza a posição do oponente vinda da rede
+    players.foe.x = lerp(players.foe.x, players.foe.tx, 0.3);
+    players.foe.y = lerp(players.foe.y, players.foe.ty, 0.3);
+  }
+
+  broadcastMe();
 
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const pr = projectiles[i];
@@ -324,7 +353,6 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-// --- Inicialização: dentro do Owlbear OU solto (teste) ---
 let started = false;
 function start() {
   if (started) return;
@@ -336,12 +364,21 @@ try {
   OBR.onReady(() => {
     myId = OBR.player.id;
     OBR.notification.show("Arena conectada ao Owlbear!");
+
+    // recebe o estado do oponente
+    OBR.broadcast.onMessage(SYNC, (event) => {
+      const d = event.data;
+      if (!d || d.id === myId) return; // ignora minhas próprias mensagens
+      foeConnected = true;
+      players.foe.tx = d.x;
+      players.foe.ty = d.y;
+      players.foe.mouse = { x: d.mx, y: d.my };
+    });
+
     start();
   });
 } catch (err) {
-  // rodando fora do Owlbear (página solta de teste)
   start();
 }
 
-// fallback extra: se o OBR não inicializar em 1.5s, inicia mesmo assim
 setTimeout(start, 1500);
