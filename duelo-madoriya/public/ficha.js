@@ -1,3 +1,4 @@
+import OBR from "https://esm.sh/@owlbear-rodeo/sdk";
 import { getSheet } from "./sheet.js";
 
 const META_KEY = "com.duelo-madoriya/sheet";
