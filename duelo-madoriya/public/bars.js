@@ -50,7 +50,7 @@ function makeCircle(cx, cy, r, color, parentId) {
       .shapeType("CIRCLE")
       .width(r * 2)
       .height(r * 2)
-      .position({ x: cx - r, y: cy - r })
+      .position({ x: cx, y: cy }) // <- aqui está a correção
       .fillColor(color)
       .fillOpacity(FILL_OP)
       .strokeColor("#ffffff")
@@ -58,6 +58,36 @@ function makeCircle(cx, cy, r, color, parentId) {
       .strokeWidth(1.5),
     parentId
   ).build();
+}
+
+function makeBadgeText(cx, cy, txt, parentId, r) {
+  const box = r * 2;
+  const fontSize = Math.max(13, r * 1.1);
+
+  return buildText()
+    .richText([
+      {
+        type: "paragraph",
+        children: [{ text: String(txt), bold: true }],
+      },
+    ])
+    .fontSize(fontSize)
+    .fontWeight(700)
+    .fillColor("#ffffff")
+    .textAlign("CENTER")
+    .textAlignVertical("MIDDLE")
+    .width(box)
+    .height(box)
+    .position({
+      x: cx - box / 2,
+      y: cy - box / 2 - 1, // pequeno ajuste visual
+    })
+    .attachedTo(parentId)
+    .layer("TEXT")
+    .locked(true)
+    .disableHit(true)
+    .metadata({ [BAR_META]: { parent: parentId } })
+    .build();
 }
 
 function makeText(cx, cy, txt, parentId, boxW, boxH = 22, fontSize = 13) {
@@ -194,38 +224,10 @@ const hpCy = hpY + hpH / 2;
   const d = r * 0.78;
 
   // EP — canto superior esquerdo
-  const epX = cx - d;
-  const epY = cy - d;
-
-  out.push(makeCircle(epX, epY, dotR, EP_COLOR, item.id));
-  out.push(
-    makeText(
-      epX,
-      epY,
-      s.ep ?? 0,
-      item.id,
-      dotR * 2,
-      dotR * 2,
-      Math.max(13, dotR * 1.1)
-    )
-  );
+out.push(makeBadgeText(epX, epY, s.ep ?? 0, item.id, dotR));
 
   // Armor — canto inferior direito
-  const arX = cx + d;
-  const arY = cy + d;
-
-  out.push(makeCircle(arX, arY, dotR, ARMOR_COLOR, item.id));
-  out.push(
-    makeText(
-      arX,
-      arY,
-      s.armor ?? 0,
-      item.id,
-      dotR * 2,
-      dotR * 2,
-      Math.max(13, dotR * 1.1)
-    )
-  );
+out.push(makeBadgeText(arX, arY, s.armor ?? 0, item.id, dotR));
 
   return out;
 }
