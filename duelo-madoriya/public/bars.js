@@ -237,3 +237,29 @@ export async function clearBars() {
 export async function refreshBars(tokenIds) {
   await createBars(tokenIds);
 }
+
+async function getBarredTokenIds() {
+  const all = await OBR.scene.items.getItems();
+  const ids = new Set();
+  for (const it of all) {
+    const parent = it.metadata?.[BAR_META]?.parent;
+    if (parent) ids.add(parent);
+  }
+  return [...ids];
+}
+
+let _watching = false;
+let _refreshTimer = null;
+
+export function watchBars() {
+  if (_watching) return;
+  _watching = true;
+
+  OBR.scene.items.onChange(() => {
+    clearTimeout(_refreshTimer);
+    _refreshTimer = setTimeout(async () => {
+      const ids = await getBarredTokenIds();
+      if (ids.length) await createBars(ids);
+    }, 150);
+  });
+}

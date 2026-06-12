@@ -57,3 +57,11 @@ OBR.onReady(() => {
     }
   });
 });
+
+import { createBars, clearBars, watchBars } from "../public/bars.js";
+
+OBR.onReady(() => {
+  watchBars(); // liga o auto-update das barras
+
+  // ... seus contextMenu.create existentes (Add Ficha, Mostrar Barras, Limpar Barras)
+});
