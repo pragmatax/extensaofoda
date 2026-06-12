@@ -26,6 +26,9 @@ let roundStartedAt = 0;     // ms; base do timer do round atual
 let roundOver = false;
 let matchOver = false;
 let needToWin = 1;
+let SCALE = 1;             // tamanho dos tokens/combate + zoom do mapa
+const BASE_R = 18;        // raio base do lutador
+function fr() { return BASE_R * SCALE; }
 
 const fighters = [null, null];
 const projectiles = [];
@@ -70,9 +73,10 @@ function arenaRect() {
 function spawnPositions() {
   const r = arenaRect();
   const midY = (r.top + r.bottom) / 2;
+  const off = 70 * SCALE;
   return [
-    { x: r.left + 70, y: midY },
-    { x: r.right - 70, y: midY },
+    { x: r.left + off, y: midY },
+    { x: r.right - off, y: midY },
   ];
 }
 
@@ -113,6 +117,7 @@ function bootFromMetadata(duel) {
     return;
   }
   config = { ...DEFAULT_CONFIG, ...(duel.config || {}) };
+  SCALE = config.scale || 1;
   isHost = duel.hostId === myId;
   round = duel.round || 1;
   roundStartedAt = duel.startedAt || nowMs();
@@ -130,6 +135,7 @@ function bootFromMetadata(duel) {
     bgEl.src = config.bgUrl;
     bgEl.style.filter = `blur(${config.bgBlur ?? 6}px)`;
     bgEl.style.opacity = String(config.bgOpacity ?? 0.35);
+    bgEl.style.transform = `scale(${SCALE})`; // dá zoom no mapa junto com os tokens
   }
 
   const nameL = document.querySelector("#nameL");
@@ -197,7 +203,7 @@ function spawnFire(d) {
   }
   if (d.kind === "melee") {
     playAttack(owner);
-    melees.push({ owner, angle: d.angle, life: 9, range: 60 + (d.charge || 0) * 12, charge: d.charge || 0, hasHit: false });
+    melees.push({ owner, angle: d.angle, life: 9, range: (60 + (d.charge || 0) * 12) * SCALE, charge: d.charge || 0, hasHit: false });
     return;
   }
   // ranged / magic
@@ -205,8 +211,8 @@ function spawnFire(d) {
   const c = d.charge || 0;
   projectiles.push({
     x: d.x, y: d.y,
-    dx: Math.cos(d.angle) * d.speed, dy: Math.sin(d.angle) * d.speed,
-    color: d.color, slot: d.slot, dmgKey: d.dmgKey, r: 8 + c * 5, charge: c,
+    dx: Math.cos(d.angle) * d.speed * SCALE, dy: Math.sin(d.angle) * d.speed * SCALE,
+    color: d.color, slot: d.slot, dmgKey: d.dmgKey, r: (8 + c * 5) * SCALE, charge: c,
   });
 }
 
@@ -307,7 +313,7 @@ addEventListener("keydown", (e) => {
   if (p.dashCd > 0) return;
   p.dashCd = 45;
   const a = angleTo(p);
-  const kx = Math.cos(a) * 40, ky = Math.sin(a) * 40;
+  const kx = Math.cos(a) * 40 * SCALE, ky = Math.sin(a) * 40 * SCALE;
   const test = rollFormula("2d6").total + (p.sheet.agility || 0);
   const iframes = test >= 9 ? 18 : 0;
   showText(p, iframes ? "DASH!" : "dash", iframes ? "#0ff" : "#aaa");
@@ -453,7 +459,7 @@ function loop() {
 function update() {
   if (mySlot >= 0 && !roundOver) {
     const me = fighters[mySlot];
-    const s = me.sheet.speed || 3;
+    const s = (me.sheet.speed || 3) * SCALE;
     if (keys.w) me.y -= s;
     if (keys.s) me.y += s;
     if (keys.a) me.x -= s;
@@ -506,8 +512,9 @@ function maybeSync() {
 
 function clampToArena(f) {
   const r = arenaRect();
-  f.x = Math.max(r.left + 18, Math.min(r.right - 18, f.x));
-  f.y = Math.max(r.top + 18, Math.min(r.bottom - 18, f.y));
+  const R = fr();
+  f.x = Math.max(r.left + R, Math.min(r.right - R, f.x));
+  f.y = Math.max(r.top + R, Math.min(r.bottom - R, f.y));
 }
 
 function updateProjectiles() {
@@ -518,7 +525,7 @@ function updateProjectiles() {
     if (!target) { projectiles.splice(i, 1); continue; }
     const dist = Math.hypot(pr.x - target.x, pr.y - target.y);
     const r = arenaRect();
-    if (dist < 24) {
+    if (dist < fr() + 6) {
       resolveHit(fighters[pr.slot], target, pr.dmgKey, pr.charge || 0);
       projectiles.splice(i, 1);
     } else if (pr.x < r.left || pr.y < r.top || pr.x > r.right || pr.y > r.bottom) {
@@ -563,7 +570,7 @@ function playHurt(target, fromX, fromY) {
   target.flash = 1; target.shake = 12;
   target.scaleX = 1.4; target.scaleY = 0.6;
   const a = Math.atan2(target.y - fromY, target.x - fromX);
-  target.kx = Math.cos(a) * 18; target.ky = Math.sin(a) * 18;
+  target.kx = Math.cos(a) * 18 * SCALE; target.ky = Math.sin(a) * 18 * SCALE;
 }
 
 function playAttack(p) { p.charge = 1; p.scaleX = 0.7; p.scaleY = 1.3; }
@@ -587,7 +594,7 @@ function updateAnims() {
 }
 
 function showText(p, text, color) {
-  floats.push({ x: p.x, y: p.y - 30, text, color, life: 40 });
+  floats.push({ x: p.x, y: p.y - fr() - 14, text, color, life: 40 });
 }
 
 /* ------------------------------ desenho ---------------------------- */
@@ -609,9 +616,9 @@ function draw() {
     ctx.save();
     ctx.translate(o.x, o.y); ctx.rotate(m.angle);
     ctx.strokeStyle = `rgba(255,255,255,${1 - prog})`;
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 6 * SCALE;
     ctx.beginPath();
-    ctx.arc(20, 0, m.range, -1 + prog * 2, 1 + prog * 2);
+    ctx.arc(20 * SCALE, 0, m.range, -1 + prog * 2, 1 + prog * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -624,7 +631,7 @@ function draw() {
     ctx.globalAlpha = p.iframes > 0 ? 0.4 + 0.3 * Math.sin(nowMs() / 40) : 1;
     ctx.translate(p.x + sx, p.y + sy);
     ctx.scale(p.scaleX, p.scaleY);
-    const R = 18;
+    const R = fr();
     if (p.imgReady && p.img) {
       // imagem do token recortada num círculo
       ctx.save();
@@ -641,7 +648,7 @@ function draw() {
       ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fill();
     }
     // anel da cor do lutador (identifica os lados)
-    ctx.strokeStyle = p.color; ctx.lineWidth = 3;
+    ctx.strokeStyle = p.color; ctx.lineWidth = 3 * SCALE;
     ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.stroke();
     if (p.flash > 0.05) {
       ctx.fillStyle = `rgba(255,255,255,${p.flash})`;
@@ -652,9 +659,9 @@ function draw() {
 
     if (p.epCharge > 0) {
       ctx.strokeStyle = "#39f"; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 20 + p.epCharge * 4, 0, 7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.x, p.y, fr() + 2 + p.epCharge * 4, 0, 7); ctx.stroke();
       ctx.fillStyle = "#39f"; ctx.font = "bold 18px sans-serif";
-      ctx.fillText(`⚡ ${p.epCharge}`, p.x - 16, p.y - 44);
+      ctx.fillText(`⚡ ${p.epCharge}`, p.x - 16, p.y - fr() - 26);
     }
 
     drawBars(p);
@@ -662,8 +669,9 @@ function draw() {
 
   if (mySlot >= 0 && fighters[mySlot]) {
     const me = fighters[mySlot], a = angleTo(me);
+    const d = fr() + 16;
     ctx.fillStyle = me.atkCd > 0 ? "#888" : "#fff";
-    ctx.beginPath(); ctx.arc(me.x + Math.cos(a) * 34, me.y + Math.sin(a) * 34, 5, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(me.x + Math.cos(a) * d, me.y + Math.sin(a) * d, 5, 0, 7); ctx.fill();
   }
 
   drawFloats();
@@ -681,14 +689,16 @@ function drawArena() {
 }
 
 function drawBars(p) {
-  const s = p.sheet, W = 44, x = p.x - W / 2, y = p.y - 40;
+  const s = p.sheet;
+  const W = 44 * SCALE, H = 5 * SCALE, gap = 7 * SCALE;
+  const x = p.x - W / 2, y = p.y - fr() - 22 * SCALE;
   const bar = (yy, frac, col) => {
-    ctx.fillStyle = "#0008"; ctx.fillRect(x, yy, W, 5);
-    ctx.fillStyle = col; ctx.fillRect(x, yy, W * Math.max(0, Math.min(1, frac)), 5);
+    ctx.fillStyle = "#0008"; ctx.fillRect(x, yy, W, H);
+    ctx.fillStyle = col; ctx.fillRect(x, yy, W * Math.max(0, Math.min(1, frac)), H);
   };
   bar(y, s.hpMax ? s.hp / s.hpMax : 0, "#e33");
-  bar(y + 7, (s.armor || 0) / 5, "#999");
-  bar(y + 14, s.epMax ? s.ep / s.epMax : 0, "#39f");
+  bar(y + gap, (s.armor || 0) / 5, "#999");
+  bar(y + gap * 2, s.epMax ? s.ep / s.epMax : 0, "#39f");
 }
 
 function drawFloats() {

@@ -1,7 +1,7 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { createBars, clearBars, watchBars } from "../public/bars.js";
 import { getSheet } from "../public/sheet.js";
-import { DUEL_META, ARENA_POPOVER, FIGHTER_COLORS, DEFAULT_CONFIG } from "../public/duel.js";
+import { DUEL_META, ARENA_POPOVER, FIGHTER_COLORS, DEFAULT_CONFIG, SCALES } from "../public/duel.js";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -94,6 +94,11 @@ function wirePlayerPanel() {
 /* ------------------------------------------------------------------ */
 
 function wireGmPanel() {
+  // popula o seletor de escala
+  $("#scale").innerHTML = SCALES
+    .map((s) => `<option value="${s.value}">${s.label}</option>`)
+    .join("");
+
   $("#pickBg").addEventListener("click", async () => {
     try {
       const imgs = await OBR.assets.downloadImages(false);
@@ -195,6 +200,7 @@ async function startDuel() {
     bgBlur: clampNum($("#blur").value, 0, 20, 6),
     bgOpacity: clampNum($("#opacity").value, 0, 100, 35) / 100,
     training: $("#training").checked,
+    scale: clampNum($("#scale").value, 1, 4, 1),
   };
 
   const fighters = chars.map((it, i) => ({

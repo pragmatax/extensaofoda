@@ -36,4 +36,13 @@ export const DEFAULT_CONFIG = {
   bgBlur: 6,
   bgOpacity: 0.35,
   training: false,
+  scale: 1, // multiplicador de tamanho dos tokens/combate + zoom do mapa
 };
+
+// Escalas disponíveis (a atual, 1×, é o mínimo; as outras dão mais zoom).
+export const SCALES = [
+  { value: 1, label: "1× (mínimo)" },
+  { value: 1.5, label: "1.5× — médio" },
+  { value: 2, label: "2× — grande" },
+  { value: 2.5, label: "2.5× — máximo" },
+];
