@@ -1,4 +1,5 @@
 import OBR from "@owlbear-rodeo/sdk";
+import { createBars, clearBars } from "../public/bars.js";
 
 OBR.onReady(() => {
   // Registra o "Add Ficha" no menu de botão direito de qualquer token
