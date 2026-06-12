@@ -1,9 +1,8 @@
-import OBR from "https://esm.sh/@owlbear-rodeo/sdk";
+import OBR, { buildShape, buildText } from "https://esm.sh/@owlbear-rodeo/sdk";
 import { getSheet } from "./sheet.js";
 
 const BAR_META = "com.duelo-madoriya/bar";
-const HP_W = 100, HP_H = 26;
-const DOT_R = 22;
+const HP_W = 100, HP_H = 26, DOT_R = 22;
 
 function tokenSize(item) {
   const w = (item.image?.image?.width || 150) * (item.scale?.x || 1);
@@ -11,37 +10,44 @@ function tokenSize(item) {
   return { w, h };
 }
 
-function circle(cx, cy, color, parentId) {
-  return {
-    type: "SHAPE", shapeType: "CIRCLE",
-    width: DOT_R * 2, height: DOT_R * 2,
-    position: { x: cx - DOT_R, y: cy - DOT_R },
-    style: { fillColor: color, fillOpacity: 1, strokeColor: "#0008", strokeOpacity: 1, strokeWidth: 2 },
-    attachedTo: parentId, layer: "ATTACHMENT", locked: true, disableHit: true,
-    metadata: { [BAR_META]: { parent: parentId } },
-  };
+function makeRect(x, y, w, h, color, parentId) {
+  return buildShape()
+    .shapeType("RECTANGLE")
+    .width(Math.max(0.1, w)).height(h)
+    .position({ x, y })
+    .fillColor(color).fillOpacity(1)
+    .strokeColor("#000000").strokeOpacity(0.6).strokeWidth(1)
+    .attachedTo(parentId).layer("ATTACHMENT")
+    .locked(true).disableHit(true)
+    .metadata({ [BAR_META]: { parent: parentId } })
+    .build();
 }
 
-function rect(x, y, w, h, color, parentId, opacity = 1) {
-  return {
-    type: "SHAPE", shapeType: "RECTANGLE",
-    width: Math.max(0.1, w), height: h,
-    position: { x, y },
-    style: { fillColor: color, fillOpacity: opacity, strokeColor: "#0008", strokeOpacity: 1, strokeWidth: 2 },
-    attachedTo: parentId, layer: "ATTACHMENT", locked: true, disableHit: true,
-    metadata: { [BAR_META]: { parent: parentId } },
-  };
+function makeCircle(cx, cy, color, parentId) {
+  return buildShape()
+    .shapeType("CIRCLE")
+    .width(DOT_R * 2).height(DOT_R * 2)
+    .position({ x: cx - DOT_R, y: cy - DOT_R })
+    .fillColor(color).fillOpacity(1)
+    .strokeColor("#000000").strokeOpacity(0.7).strokeWidth(2)
+    .attachedTo(parentId).layer("ATTACHMENT")
+    .locked(true).disableHit(true)
+    .metadata({ [BAR_META]: { parent: parentId } })
+    .build();
 }
 
-function label(cx, cy, text, size, parentId) {
-  return {
-    type: "TEXT",
-    text: { type: "PLAIN", plainText: String(text),
-      style: { fillColor: "#fff", fontSize: size, fontWeight: 700, textAlign: "CENTER", textAlignVertical: "MIDDLE" } },
-    position: { x: cx, y: cy }, attachedTo: parentId,
-    layer: "ATTACHMENT", locked: true, disableHit: true,
-    metadata: { [BAR_META]: { parent: parentId } },
-  };
+function makeText(cx, cy, txt, parentId) {
+  return buildText()
+    .plainText(String(txt))
+    .fontSize(16).fontWeight(700)
+    .fillColor("#ffffff")
+    .textAlign("CENTER").textAlignVertical("MIDDLE")
+    .width(60).height(24)
+    .position({ x: cx - 30, y: cy - 12 })
+    .attachedTo(parentId).layer("ATTACHMENT")
+    .locked(true).disableHit(true)
+    .metadata({ [BAR_META]: { parent: parentId } })
+    .build();
 }
 
 function buildFor(item) {
@@ -50,22 +56,22 @@ function buildFor(item) {
   const cx = item.position.x, cy = item.position.y;
   const out = [];
 
-  // Barra de HP (vermelha) embaixo
+  // HP — barra vermelha embaixo
   const hpX = cx - HP_W / 2, hpY = cy + h / 2 - 6;
   const frac = Math.max(0, Math.min(1, s.hpMax ? s.hp / s.hpMax : 0));
-  out.push(rect(hpX, hpY, HP_W, HP_H, "#5a0000", item.id));
-  out.push(rect(hpX, hpY, HP_W * frac, HP_H, "#e23b3b", item.id));
-  out.push(label(cx, hpY + HP_H / 2, `${s.hp}/${s.hpMax}`, 16, item.id));
+  out.push(makeRect(hpX, hpY, HP_W, HP_H, "#5a0000", item.id));
+  out.push(makeRect(hpX, hpY, HP_W * frac, HP_H, "#e23b3b", item.id));
+  out.push(makeText(cx, hpY + HP_H / 2, `${s.hp}/${s.hpMax}`, item.id));
 
-  // Bolinha Armor (azul) canto inferior direito
-  const arX = cx + w / 2 - 6, arY = cy + h / 2 - 18;
-  out.push(circle(arX, arY, "#2e6fdb", item.id));
-  out.push(label(arX, arY, s.armor ?? 0, 16, item.id));
+  // Armor — bolinha AZUL (canto inf. direito)
+  const arX = cx + w / 2 - 4, arY = cy + h / 2 - 18;
+  out.push(makeCircle(arX, arY, "#2e6fdb", item.id));
+  out.push(makeText(arX, arY, s.armor ?? 0, item.id));
 
-  // Bolinha EP (amarela) canto superior esquerdo
-  const epX = cx - w / 2 + 6, epY = cy - h / 2 + 18;
-  out.push(circle(epX, epY, "#e0b020", item.id));
-  out.push(label(epX, epY, s.ep ?? 0, 16, item.id));
+  // EP — bolinha AMARELA (canto sup. esquerdo)
+  const epX = cx - w / 2 + 4, epY = cy - h / 2 + 18;
+  out.push(makeCircle(epX, epY, "#e0b020", item.id));
+  out.push(makeText(epX, epY, s.ep ?? 0, item.id));
 
   return out;
 }
