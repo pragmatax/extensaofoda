@@ -1,11 +1,23 @@
-import OBR, { buildShape, buildText } from "https://esm.sh/@owlbear-rodeo/sdk";
+import OBR, {
+  buildShape,
+  buildText,
+  buildPath,
+  Command,
+} from "https://esm.sh/@owlbear-rodeo/sdk";
+
 import { getSheet } from "./sheet.js";
 
 const BAR_META = "com.duelo-madoriya/bar";
 
-const BASE_HP_W = 88;
-const BASE_HP_H = 15;
+const BASE_HP_W = 118;
+const BASE_HP_H = 16;
 const BASE_DOT_R = 12;
+
+const HP_FILL = "#ff4f58"; // vermelho clarinho
+const HP_BG = "#9e252d";   // vermelho escuro do fundo
+
+const EP_COLOR = "#2f8d73";
+const ARMOR_COLOR = "#4b73bd";
 
 const FILL_OP = 0.9;
 const STROKE_OP = 0.55;
@@ -20,93 +32,32 @@ function tokenSize(item) {
   return { w, h };
 }
 
-// x/y aqui são canto superior esquerdo.
-// A shape do Owlbear posiciona pelo centro, por isso somamos w/2 e h/2.
-function makeRect(x, y, w, h, color, parentId) {
-  return buildShape()
-    .shapeType("RECTANGLE")
-    .width(Math.max(0.1, w))
-    .height(h)
-    .position({ x, y })
-    .fillColor(color)
-    .fillOpacity(FILL_OP)
-    .strokeColor("#000000")
-    .strokeOpacity(0)
-    .strokeWidth(0)
+function withMeta(builder, parentId) {
+  return builder
     .attachedTo(parentId)
     .layer("ATTACHMENT")
     .locked(true)
     .disableHit(true)
-    .metadata({ [BAR_META]: { parent: parentId } })
-    .build();
+    .metadata({ [BAR_META]: { parent: parentId } });
 }
 
-// cx/cy aqui são o centro real da bolinha.
-function makeCircleShape(
-  cx,
-  cy,
-  diameter,
-  color,
-  parentId,
-  strokeColor = "#000000",
-  strokeOpacity = 0,
-  strokeWidth = 0
-) {
-  return buildShape()
-    .shapeType("CIRCLE")
-    .width(diameter)
-    .height(diameter)
-    .position({ x: cx - diameter / 2, y: cy - diameter / 2 })
-    .fillColor(color)
-    .fillOpacity(FILL_OP)
-    .strokeColor(strokeColor)
-    .strokeOpacity(strokeOpacity)
-    .strokeWidth(strokeWidth)
-    .attachedTo(parentId)
-    .layer("ATTACHMENT")
-    .locked(true)
-    .disableHit(true)
-    .metadata({ [BAR_META]: { parent: parentId } })
-    .build();
+function makeCircle(cx, cy, r, color, parentId) {
+  return withMeta(
+    buildShape()
+      .shapeType("CIRCLE")
+      .width(r * 2)
+      .height(r * 2)
+      .position({ x: cx - r, y: cy - r })
+      .fillColor(color)
+      .fillOpacity(FILL_OP)
+      .strokeColor("#ffffff")
+      .strokeOpacity(STROKE_OP)
+      .strokeWidth(1.5),
+    parentId
+  ).build();
 }
 
-// Barra arredondada real, sem caps soltos.
-function makePill(x, y, w, h, color, parentId) {
-  const out = [];
-
-  if (w <= 0) return out;
-
-  if (w <= h) {
-    out.push(makeCircleShape(x + w / 2, y + h / 2, w, color, parentId));
-    return out;
-  }
-
-  const cy = y + h / 2;
-  const radius = h / 2;
-  const midW = w - h;
-
-  out.push(makeCircleShape(x + radius, cy, h, color, parentId));
-  out.push(makeRect(x + radius, y, midW, h, color, parentId));
-  out.push(makeCircleShape(x + w - radius, cy, h, color, parentId));
-
-  return out;
-}
-
-function makeCircle(cx, cy, radius, color, parentId) {
-  return makeCircleShape(
-    cx,
-    cy,
-    radius * 2,
-    color,
-    parentId,
-    "#ffffff",
-    STROKE_OP,
-    1.5
-  );
-}
-
-// Texto usa caixa com x/y no canto superior esquerdo.
-function makeText(cx, cy, txt, parentId, boxW = BASE_DOT_R * 2, boxH = 22, fontSize = 13) {
+function makeText(cx, cy, txt, parentId, boxW, boxH = 22, fontSize = 13) {
   return buildText()
     .richText([
       {
@@ -123,11 +74,44 @@ function makeText(cx, cy, txt, parentId, boxW = BASE_DOT_R * 2, boxH = 22, fontS
     .height(boxH)
     .position({ x: cx - boxW / 2, y: cy - boxH / 2 })
     .attachedTo(parentId)
-    .layer("ATTACHMENT")
+    .layer("TEXT")
     .locked(true)
     .disableHit(true)
     .metadata({ [BAR_META]: { parent: parentId } })
     .build();
+}
+
+// Barra arredondada em UMA peça só.
+// Não usa mais círculo + retângulo, então não desalinha.
+function makePill(x, y, w, h, color, parentId) {
+  const r = h / 2;
+  const right = x + w;
+  const bottom = y + h;
+  const cy = y + r;
+
+  return withMeta(
+    buildPath()
+      .commands([
+        [Command.MOVE, x + r, y],
+        [Command.LINE, right - r, y],
+
+        [Command.QUAD, right, y, right, cy],
+        [Command.QUAD, right, bottom, right - r, bottom],
+
+        [Command.LINE, x + r, bottom],
+
+        [Command.QUAD, x, bottom, x, cy],
+        [Command.QUAD, x, y, x + r, y],
+
+        [Command.CLOSE],
+      ])
+      .fillColor(color)
+      .fillOpacity(FILL_OP)
+      .strokeColor("#000000")
+      .strokeOpacity(0)
+      .strokeWidth(0),
+    parentId
+  ).build();
 }
 
 function buildFor(item) {
@@ -140,52 +124,47 @@ function buildFor(item) {
   const r = Math.min(w, h) / 2;
   const out = [];
 
-  // Tamanho dinâmico para ficar parecido com o print 2.
-  const hpW = Math.max(BASE_HP_W, w * 1.14);
-  const hpH = Math.max(BASE_HP_H, r * 0.2);
-  const dotR = Math.max(BASE_DOT_R, r * 0.18);
+  // Barra de HP igual ao print 2: centralizada, curta e colada no token.
+  const hpW = Math.max(BASE_HP_W, r * 1.75);
+  const hpH = clamp(r * 0.18, BASE_HP_H, 21);
 
-// HP — barra arredondada embaixo do token
-const hpW = Math.max(BASE_HP_W, w * 1.14);
-const hpH = Math.max(BASE_HP_H, r * 0.2);
+  const hpX = cx - hpW / 2;
+  const hpY = cy + r - hpH * 0.35;
+  const hpCy = hpY + hpH / 2;
 
-const hpX = cx - hpW / 2;
-const hpY = cy + r - hpH * 0.18;
-const hpCy = hpY + hpH / 2;
+  const frac = clamp(s.hpMax ? s.hp / s.hpMax : 0, 0, 1);
 
-const frac = clamp(s.hpMax ? s.hp / s.hpMax : 0, 0, 1);
+  // Fundo da barra
+  out.push(makePill(hpX, hpY, hpW, hpH, HP_BG, item.id));
 
-// Fundo da barra
-out.push(...makePill(hpX, hpY, hpW, hpH, HP_BG, item.id));
+  // Vida atual
+  if (frac > 0) {
+    const fillW = Math.max(hpH, hpW * frac);
+    out.push(makePill(hpX, hpY, fillW, hpH, HP_FILL, item.id));
+  }
 
-// Preenchimento da vida
-if (frac > 0) {
-  const fillW = hpW * frac;
-  out.push(...makePill(hpX, hpY, fillW, hpH, HP_FILL, item.id));
-}
+  // Texto do HP por cima
+  out.push(
+    makeText(
+      cx,
+      hpCy,
+      `${s.hp}/${s.hpMax}`,
+      item.id,
+      hpW,
+      hpH + 6,
+      Math.max(13, hpH * 0.8)
+    )
+  );
 
-// Texto da vida
-out.push(
-  makeText(
-    cx,
-    hpCy,
-    `${s.hp}/${s.hpMax}`,
-    item.id,
-    hpW,
-    hpH + 6,
-    Math.max(13, hpH * 0.8)
-  )
-);
-  // Bolinhas nas bordas do token, estilo print 2.
+  // Bolinhas de identificação
+  const dotR = clamp(r * 0.18, BASE_DOT_R, 18);
   const d = r * 0.78;
 
-  // EP — canto superior esquerdo.
+  // EP — canto superior esquerdo
   const epX = cx - d;
   const epY = cy - d;
 
-  // Verde igual ao print 2.
-  // Para voltar ao amarelo antigo, troque por "#e0b020".
-  out.push(makeCircle(epX, epY, dotR, "#2f8d73", item.id));
+  out.push(makeCircle(epX, epY, dotR, EP_COLOR, item.id));
   out.push(
     makeText(
       epX,
@@ -194,15 +173,15 @@ out.push(
       item.id,
       dotR * 2,
       dotR * 2,
-      Math.max(13, dotR * 1.15)
+      Math.max(13, dotR * 1.1)
     )
   );
 
-  // Armor — canto inferior direito.
+  // Armor — canto inferior direito
   const arX = cx + d;
   const arY = cy + d;
 
-  out.push(makeCircle(arX, arY, dotR, "#4b73bd", item.id));
+  out.push(makeCircle(arX, arY, dotR, ARMOR_COLOR, item.id));
   out.push(
     makeText(
       arX,
@@ -211,7 +190,7 @@ out.push(
       item.id,
       dotR * 2,
       dotR * 2,
-      Math.max(13, dotR * 1.15)
+      Math.max(13, dotR * 1.1)
     )
   );
 
