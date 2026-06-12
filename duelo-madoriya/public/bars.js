@@ -14,11 +14,24 @@ function tokenSize(item) {
 
 function makeRect(x, y, w, h, color, parentId) {
   return buildShape()
-    .shapeType("ROUNDED_RECTANGLE")
+    .shapeType("RECTANGLE")
     .width(Math.max(0.1, w)).height(h)
     .position({ x, y })
     .fillColor(color).fillOpacity(FILL_OP)
-    .strokeColor("#000000").strokeOpacity(STROKE_OP).strokeWidth(1)
+    .strokeColor("#000000").strokeOpacity(0).strokeWidth(0)
+    .attachedTo(parentId).layer("ATTACHMENT")
+    .locked(true).disableHit(true)
+    .metadata({ [BAR_META]: { parent: parentId } })
+    .build();
+}
+
+function makeCap(cx, cy, d, color, parentId) {
+  return buildShape()
+    .shapeType("CIRCLE")
+    .width(d).height(d)
+    .position({ x: cx - d / 2, y: cy - d / 2 })
+    .fillColor(color).fillOpacity(FILL_OP)
+    .strokeColor("#000000").strokeOpacity(0).strokeWidth(0)
     .attachedTo(parentId).layer("ATTACHMENT")
     .locked(true).disableHit(true)
     .metadata({ [BAR_META]: { parent: parentId } })
@@ -61,12 +74,25 @@ function buildFor(item) {
   const out = [];
 
   // HP — barra logo abaixo do token
+    // HP — barra arredondada logo abaixo do token
   const hpX = cx - HP_W / 2, hpY = cy + r + 2;
+  const cyMid = hpY + HP_H / 2;
   const frac = Math.max(0, Math.min(1, s.hpMax ? s.hp / s.hpMax : 0));
-  out.push(makeRect(hpX, hpY, HP_W, HP_H, "#5a0000", item.id));
-  out.push(makeRect(hpX, hpY, HP_W * frac, HP_H, "#e23b3b", item.id));
-    out.push(makeText(cx, hpY + HP_H / 2, `${s.hp}/${s.hpMax}`, item.id, HP_W));
 
+  // fundo (vazio) com pontas
+  out.push(makeCap(hpX, cyMid, HP_H, "#5a0000", item.id));
+  out.push(makeCap(hpX + HP_W, cyMid, HP_H, "#5a0000", item.id));
+  out.push(makeRect(hpX, hpY, HP_W, HP_H, "#5a0000", item.id));
+
+  // preenchimento (vida) com pontas
+  const fillW = HP_W * frac;
+  out.push(makeCap(hpX, cyMid, HP_H, "#e23b3b", item.id));
+  if (fillW > 0) out.push(makeCap(hpX + fillW, cyMid, HP_H, "#e23b3b", item.id));
+  out.push(makeRect(hpX, hpY, fillW, HP_H, "#e23b3b", item.id));
+
+  // texto por cima
+  out.push(makeText(cx, cyMid, `${s.hp}/${s.hpMax}`, item.id, HP_W));
+  
   // posições nas "bordas" do token (45°), bem coladas
   const d = r * 0.72;
 
