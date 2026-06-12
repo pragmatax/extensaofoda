@@ -7,7 +7,7 @@ const BASE_HP_W = 88;
 const BASE_HP_H = 15;
 const BASE_DOT_R = 12;
 
-const FILL_OP = 0.85;
+const FILL_OP = 0.9;
 const STROKE_OP = 0.55;
 
 function clamp(v, min, max) {
@@ -27,7 +27,7 @@ function makeRect(x, y, w, h, color, parentId) {
     .shapeType("RECTANGLE")
     .width(Math.max(0.1, w))
     .height(h)
-    .position({ x: x + w / 2, y: y + h / 2 })
+    .position({ x, y })
     .fillColor(color)
     .fillOpacity(FILL_OP)
     .strokeColor("#000000")
@@ -56,7 +56,7 @@ function makeCircleShape(
     .shapeType("CIRCLE")
     .width(diameter)
     .height(diameter)
-    .position({ x: cx, y: cy })
+    .position({ x: cx - diameter / 2, y: cy - diameter / 2 })
     .fillColor(color)
     .fillOpacity(FILL_OP)
     .strokeColor(strokeColor)
@@ -76,18 +76,18 @@ function makePill(x, y, w, h, color, parentId) {
 
   if (w <= 0) return out;
 
-  // Para valores muito pequenos, vira uma bolinha.
   if (w <= h) {
     out.push(makeCircleShape(x + w / 2, y + h / 2, w, color, parentId));
     return out;
   }
 
-  const midW = w - h;
   const cy = y + h / 2;
+  const radius = h / 2;
+  const midW = w - h;
 
-  out.push(makeCircleShape(x + h / 2, cy, h, color, parentId));
-  out.push(makeCircleShape(x + w - h / 2, cy, h, color, parentId));
-  out.push(makeRect(x + h / 2, y, midW, h, color, parentId));
+  out.push(makeCircleShape(x + radius, cy, h, color, parentId));
+  out.push(makeRect(x + radius, y, midW, h, color, parentId));
+  out.push(makeCircleShape(x + w - radius, cy, h, color, parentId));
 
   return out;
 }
@@ -145,35 +145,37 @@ function buildFor(item) {
   const hpH = Math.max(BASE_HP_H, r * 0.2);
   const dotR = Math.max(BASE_DOT_R, r * 0.18);
 
-  // HP — barra arredondada embaixo do token.
-  const hpX = cx - hpW / 2;
-  const hpY = cy + r - hpH * 0.25;
-  const hpCy = hpY + hpH / 2;
+// HP — barra arredondada embaixo do token
+const hpW = Math.max(BASE_HP_W, w * 1.14);
+const hpH = Math.max(BASE_HP_H, r * 0.2);
 
-  const frac = clamp(s.hpMax ? s.hp / s.hpMax : 0, 0, 1);
+const hpX = cx - hpW / 2;
+const hpY = cy + r - hpH * 0.18;
+const hpCy = hpY + hpH / 2;
 
-  // Fundo da barra.
-  out.push(...makePill(hpX, hpY, hpW, hpH, "#5a0000", item.id));
+const frac = clamp(s.hpMax ? s.hp / s.hpMax : 0, 0, 1);
 
-  // Preenchimento da vida.
-  if (frac > 0) {
-    const fillW = Math.max(hpH, hpW * frac);
-    out.push(...makePill(hpX, hpY, fillW, hpH, "#e23b3b", item.id));
-  }
+// Fundo da barra
+out.push(...makePill(hpX, hpY, hpW, hpH, HP_BG, item.id));
 
-  // Texto da vida.
-  out.push(
-    makeText(
-      cx,
-      hpCy,
-      `${s.hp}/${s.hpMax}`,
-      item.id,
-      hpW,
-      hpH + 6,
-      Math.max(13, hpH * 0.8)
-    )
-  );
+// Preenchimento da vida
+if (frac > 0) {
+  const fillW = hpW * frac;
+  out.push(...makePill(hpX, hpY, fillW, hpH, HP_FILL, item.id));
+}
 
+// Texto da vida
+out.push(
+  makeText(
+    cx,
+    hpCy,
+    `${s.hp}/${s.hpMax}`,
+    item.id,
+    hpW,
+    hpH + 6,
+    Math.max(13, hpH * 0.8)
+  )
+);
   // Bolinhas nas bordas do token, estilo print 2.
   const d = r * 0.78;
 
