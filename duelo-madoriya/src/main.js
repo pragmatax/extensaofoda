@@ -1,5 +1,12 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { createBars, clearBars } from "../public/bars.js";
+import { createBars, clearBars, watchBars } from "../public/bars.js";
+
+OBR.onReady(() => {
+  watchBars(); // liga o auto-update das barras
+
+  // ... seus contextMenu.create existentes (Add Ficha, Mostrar Barras, Limpar Barras)
+});
 
 OBR.onReady(() => {
   // Menu 1: Add Ficha (já funcionava)
@@ -58,10 +65,3 @@ OBR.onReady(() => {
   });
 });
 
-import { createBars, clearBars, watchBars } from "../public/bars.js";
-
-OBR.onReady(() => {
-  watchBars(); // liga o auto-update das barras
-
-  // ... seus contextMenu.create existentes (Add Ficha, Mostrar Barras, Limpar Barras)
-});
